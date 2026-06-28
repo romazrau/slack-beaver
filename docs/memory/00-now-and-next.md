@@ -17,6 +17,7 @@
 - `launchctl submit` is documented as optional demo convenience only; foreground `npm run dev` remains the reliable v0 demo path.
 - `docs/memory/slack-app-home-chat.md` records the decision to use Slack-native App Home chat instead of a desktop app.
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` now records the implemented Local Memory and OpenAI token safety slice.
+- `docs/repo-goal/04-openai-agent-runner.md` now defines the next phase for a guarded OpenAI-backed `ask <question>` flow.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and deferred full OpenAI agent decisions.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.

@@ -344,6 +344,7 @@ launchctl remove slack-beaver-local-agent
 - `docs/repo-goal/01-accelerated-local-file-search.md`: Slack Local File Search v0 的加速 phase、runtime decision 與驗收標準。
 - `docs/repo-goal/02-v0-facts-and-hardening.md`: 下一階段 facts inventory、剩餘 UAT、coverage gap review、demo runbook 與 Phase 5 readiness decision。
 - `docs/repo-goal/03-local-memory-and-ai-agent.md`: Local Memory、OpenAI token safety、Tool Registry guardrails 與 prompt-injection 驗收標準和執行結果。
+- `docs/repo-goal/04-openai-agent-runner.md`: 下一階段 guarded OpenAI-backed `ask <question>` flow、Tool Registry safety、prompt-injection 驗證與實作切片。
 - `docs/runbooks/slack-local-file-search-v0.md`: 可重跑的 v0 setup、foreground demo、optional launchctl demo、manual UAT 與 cleanup runbook。
 - `docs/memory/`: 專案決策、進度與下一步紀錄。
 - `AGENTS.md`: Agent 工作規則、測試要求與文件更新要求。
