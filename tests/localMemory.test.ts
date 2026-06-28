@@ -118,7 +118,7 @@ describe("runLocalCli", () => {
     await runLocalCli(["folders:add", tempDir]);
     await expect(runLocalCli(["memory:reset"])).resolves.toMatchObject({
       code: 1,
-      message: expect.stringContaining("Refusing to reset local memory")
+      message: expect.stringContaining("Reset is blocked")
     });
     await expect(runLocalCli(["folders:list"])).resolves.toMatchObject({
       message: expect.stringContaining(await fs.realpath(tempDir))
@@ -128,7 +128,7 @@ describe("runLocalCli", () => {
       runLocalCli(["memory:reset", "--confirm", "RESET_LOCAL_MEMORY", "--yes"])
     ).resolves.toMatchObject({
       code: 0,
-      message: expect.stringContaining("Local memory reset complete")
+      message: expect.stringContaining("Local memory has been reset")
     });
     await expect(runLocalCli(["folders:list"])).resolves.toMatchObject({
       message: "No allowed folders saved."

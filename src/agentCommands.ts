@@ -1,6 +1,11 @@
 import type { AppConfig } from "./config.js";
 import { writeAuditLog } from "./auditLog.js";
 import { LocalMemoryStore, mergeUniquePaths } from "./localMemory.js";
+import {
+  formatNoFoldersGuidance,
+  formatResetMemorySlackGuidance,
+  formatTokenRefusalGuidance
+} from "./onboardingCopy.js";
 import { formatErrorResponse, formatSearchResponse, parseAgentCommand } from "./slackResponses.js";
 import { looksLikeAiToken } from "./secretSetup.js";
 import { runLocalSearchTool } from "./toolRegistry.js";
@@ -20,15 +25,11 @@ export type RunAgentTextCommandInput = {
 
 export async function runAgentTextCommand(input: RunAgentTextCommandInput): Promise<string> {
   if (looksLikeAiToken(input.text)) {
-    return "I cannot accept API keys or paid tokens in Slack. Configure secrets locally with `npm run agent:secrets:set-openai`.";
+    return formatTokenRefusalGuidance();
   }
 
   if (isResetMemoryRequest(input.text)) {
-    return [
-      "Local memory reset is intentionally local-only.",
-      "To initialize this bot again, run `npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes` on this computer.",
-      "This deletes allowed folders, settings, conversation state, tool-call records, and provider setup metadata from the local SQLite DB. Token files are not deleted."
-    ].join("\n");
+    return formatResetMemorySlackGuidance();
   }
 
   const parsed = parseAgentCommand(input.text);
@@ -44,10 +45,7 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
     const memoryFolders = memoryStore?.listEnabledAllowedFolderPaths() ?? [];
     const watchedFolders = mergeUniquePaths(input.config.localFiles.watchedFolders, memoryFolders);
     if (watchedFolders.length === 0) {
-      return [
-        "No local folders are allowed yet.",
-        "Add one on this computer with `npm run agent:folders:add -- /absolute/path/to/folder`, then try `find <query>` again."
-      ].join("\n");
+      return formatNoFoldersGuidance();
     }
 
     const config = {

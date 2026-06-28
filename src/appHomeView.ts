@@ -1,5 +1,6 @@
 import type { KnownBlock, View } from "@slack/bolt";
 import type { AppConfig } from "./config.js";
+import { formatSetupChecklist } from "./onboardingCopy.js";
 
 export type AppHomeState = {
   allowedFolderCount?: number;
@@ -50,7 +51,7 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*Chat command*\nOpen the Messages tab and type `find <query>`."
+        text: "*Chat command*\nOpen the Messages tab and type `find <query>`. Type `reset memory` to see local reset instructions."
       }
     },
     ...setupBlocks,
@@ -63,7 +64,7 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
         },
         {
           type: "mrkdwn",
-          text: "*Token setup*\nUse local CLI only"
+          text: "*Token setup*\nLocal CLI only"
         }
       ]
     },
@@ -72,7 +73,7 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
       elements: [
         {
           type: "mrkdwn",
-          text: "v1 is read-only and only searches allowlisted local folders. Secrets and token values are never accepted or shown in Slack."
+          text: "Secrets and token values are never accepted in Slack. Configure folders and OpenAI locally before enabling the AI agent."
         }
       ]
     }
@@ -90,7 +91,7 @@ function buildSetupBlocks(): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*Setup needed*\nNo local folders are allowed yet. Run `npm run agent:folders:add -- /absolute/path/to/folder` on this computer."
+        text: `*Setup needed*\n${formatSetupChecklist()}`
       }
     }
   ];

@@ -106,8 +106,11 @@ describe("runAgentTextCommand", () => {
       config
     });
 
-    expect(response).toContain("No local folders are allowed yet");
+    expect(response).toContain("I am initialized");
+    expect(response).toContain("Setup checklist");
     expect(response).toContain("npm run agent:folders:add");
+    expect(response).toContain("npm run agent:secrets:set-openai");
+    expect(response).toContain("AI agent can be enabled");
     await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
   });
 
@@ -123,6 +126,8 @@ describe("runAgentTextCommand", () => {
     });
 
     expect(response).toContain("cannot accept API keys");
+    expect(response).toContain("npm run agent:secrets:set-openai");
+    expect(response).toContain("AI agent can be enabled");
     await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
   });
 
@@ -136,8 +141,11 @@ describe("runAgentTextCommand", () => {
       config
     });
 
-    expect(response).toContain("local-only");
+    expect(response).toContain("must be done on this computer");
+    expect(response).toContain("I will not delete local memory from a Slack message");
     expect(response).toContain("RESET_LOCAL_MEMORY");
+    expect(response).toContain("After reset");
+    expect(response).toContain("AI agent can be enabled");
     await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
   });
 });

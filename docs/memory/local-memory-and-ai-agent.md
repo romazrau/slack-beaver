@@ -27,10 +27,11 @@ The defaults are:
 
 - If a user opens the app with no known folders, App Home shows local folder setup guidance.
 - If no folders exist and the user runs `find <query>`, Slack asks them to add a folder locally.
+- Initialization guidance now shows a clear setup checklist: add folder, list folders, set OpenAI token locally, then return to Slack.
 - If known folders exist, search requests use `.env` watched folders plus SQLite enabled allowed folders.
 - Users can add, list, and disable paths through local CLI scripts.
 - Users can initialize local memory again with `npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes`.
-- Slack `reset memory` only returns local CLI guidance and never deletes local records directly.
+- Slack `reset memory` only returns local CLI guidance, explains the local double-confirmation command, and never deletes local records directly.
 - Slack refuses pasted AI-token-like strings and directs users to local CLI setup.
 - Local search now runs through a Tool Registry wrapper that records tool-call summaries in SQLite.
 
@@ -38,6 +39,7 @@ The defaults are:
 
 - Real OpenAI API calls.
 - LLM agent loop and tool choice.
+- Enabling the AI agent after folders and OpenAI token are configured.
 - Prompt-injection fixture UAT against LLM-generated tool calls.
 - Claude or opencode provider support.
 

@@ -34,7 +34,7 @@
 - Chrome and Computer Use verified the updated app icon in Slack app chat and the sidebar.
 - `doc-test/` directory depth was checked to stay within five levels from the fixture root.
 - Local Memory/token safety verification passed with automated tests and typecheck. Reset behavior requires local double confirmation and cannot be triggered directly from Slack. Full OpenAI API calls and LLM agent loop remain deferred.
-- Chrome live UAT passed for the initialized Local Memory state: App Home showed setup guidance and OpenAI token local-only status, `find Socket` returned folder setup guidance, `reset memory` returned local-only double-confirmation instructions, and a fake token-like message was refused with local CLI guidance. Computer Use instructions were read, but no direct Computer Use UI MCP was exposed in this turn.
+- Chrome live UAT passed for the initialized Local Memory state: App Home showed setup guidance and OpenAI token local-only status, `find Socket` returned folder setup guidance, `reset memory` returned local-only double-confirmation instructions, and a fake token-like message was refused with local CLI guidance. Follow-up copy now uses a clearer setup checklist and states that folders plus OpenAI token setup are prerequisites before enabling the AI agent. Computer Use instructions were read, but no direct Computer Use UI MCP was exposed in that turn.
 
 ## Likely Next Work
 

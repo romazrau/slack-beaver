@@ -60,6 +60,9 @@ describe("buildAppHomeView", () => {
 
     expect(serialized).toContain("Setup needed");
     expect(serialized).toContain("npm run agent:folders:add");
+    expect(serialized).toContain("npm run agent:folders:list");
+    expect(serialized).toContain("npm run agent:secrets:set-openai");
+    expect(serialized).toContain("AI agent can be enabled");
     expect(serialized).toContain("OpenAI token");
   });
 });

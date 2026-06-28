@@ -209,13 +209,22 @@ npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes
 
 Folder add 會驗證 absolute path、realpath、存在性、目錄型態、OS readable permission、`DENYLIST_FOLDERS`。如果沒有任何 known folders，App Home 和 chat search 會提示使用者用 local CLI 新增 folder，而不是直接失敗。
 
+初始化狀態下，App Home 和 chat 回覆會顯示 setup checklist：
+
+1. 新增 Local Agent 可讀取的資料夾：`npm run agent:folders:add -- /absolute/path/to/folder`
+2. 確認目前保存的 folders：`npm run agent:folders:list`
+3. 在本機設定 OpenAI token：`npm run agent:secrets:set-openai`
+4. 回到 Slack 輸入 `find <query>`
+
+完成 folders 和 OpenAI token 設定後，後續階段才會啟用真正的 AI agent runner。現階段仍只啟用 guarded local search tool。
+
 Memory reset 是本機初始化工具，不會從 Slack 直接執行。Slack 中輸入 `reset memory` 只會回覆本機操作說明。真正 reset 必須在使用者電腦上執行完整雙重確認命令：
 
 ```sh
 npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes
 ```
 
-這會清空 local SQLite DB 中的 allowed folders、settings、conversation state、tool-call records 與 provider setup metadata，讓 bot 回到未設定 folders 的初始化狀態。它不會刪除 disk 上的 token file；若要更換 OpenAI token，請重新執行 `npm run agent:secrets:set-openai`。
+這會清空 local SQLite DB 中的 allowed folders、settings、conversation state、tool-call records 與 provider setup metadata，讓 bot 回到初始化狀態並重新顯示 setup checklist。它不會刪除 disk 上的 token file；若要更換 OpenAI token，請重新執行 `npm run agent:secrets:set-openai`。
 
 OpenAI provider 第一版只做 local token setup 與 metadata，不會把 token 送進 Slack 或 audit log。AI token 是付費機密，不能透過 Slack DM、App Home message、文件或 audit log 傳遞。請只在使用者電腦上透過 local CLI 設定：
 

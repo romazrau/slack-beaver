@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.js";
 import { validateAllowedFolderInput } from "./folderSetup.js";
 import { LocalMemoryStore } from "./localMemory.js";
+import { formatResetCompletedGuidance, formatResetRefusalGuidance } from "./onboardingCopy.js";
 import { saveOpenAiToken } from "./secretSetup.js";
 
 type CliResult = {
@@ -83,23 +84,14 @@ function resetMemory(args: string[], store: LocalMemoryStore): CliResult {
   if (confirmation !== "RESET_LOCAL_MEMORY" || !hasYes) {
     return {
       code: 1,
-      message: [
-        "Refusing to reset local memory without double confirmation.",
-        "This deletes allowed folders, settings, conversation state, tool-call records, and provider setup metadata from the local SQLite DB.",
-        "It does not delete token files on disk.",
-        "Run exactly: npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes"
-      ].join("\n")
+      message: formatResetRefusalGuidance()
     };
   }
 
   const counts = store.resetAll();
   return {
     code: 0,
-    message: [
-      "Local memory reset complete.",
-      `Deleted records: allowed_folders=${counts.allowedFolders}, settings=${counts.settings}, conversations=${counts.conversations}, tool_calls=${counts.toolCalls}, provider_config=${counts.providerConfig}.`,
-      "The bot is initialized again; reopen App Home or send a message to see setup guidance."
-    ].join("\n")
+    message: formatResetCompletedGuidance(counts)
   };
 }
 
