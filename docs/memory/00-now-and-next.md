@@ -5,6 +5,7 @@
 - Repo now has Slack Local File Search v0 implemented and live-tested with a real internal Slack app.
 - `docs/repo-goal/00-poc.md` defines the Slack-based Local AI Ops Agent three-day POC.
 - `docs/repo-goal/01-accelerated-local-file-search.md` narrows the immediate plan to a Slack bot that can locally search allowlisted files and explains the Local Agent runtime decision.
+- `docs/repo-goal/02-v0-facts-and-hardening.md` defines the next phase: facts inventory, remaining manual UAT, coverage gap review, demo runbook, and Phase 5 readiness decision.
 - `README.md` now describes the Local Agent runtime, Slack Socket Mode flow, setup, run, test, demo commands, For Coding workspace setup notes, daemon commands, and live UAT result.
 - `.gitignore` now protects local dependencies, build outputs, secrets, SQLite runtime files, logs, caches, and local OAuth/token artifacts.
 - Source code includes config validation, guarded direct local search, Slack `/agent find <query>` command handling, and JSONL audit logging.
@@ -21,5 +22,7 @@
 
 ## Likely Next Work
 
+- Execute `docs/repo-goal/02-v0-facts-and-hardening.md`.
 - Run the remaining manual UAT cases: no-result query, invalid query, denylist enforcement, oversized file skip, and agent-offline behavior.
-- Decide whether Phase 5 should add SQLite local index cache or AI summary first.
+- Create a repeatable demo runbook and coverage gap list.
+- Decide whether Phase 5 should add SQLite local index cache or AI summary first after UAT gaps are closed.

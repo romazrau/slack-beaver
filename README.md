@@ -209,9 +209,10 @@ launchctl remove slack-beaver-local-agent
 
 - `docs/repo-goal/00-poc.md`: 三天 POC 分析、架構建議、phase 規劃與驗收標準。
 - `docs/repo-goal/01-accelerated-local-file-search.md`: Slack Local File Search v0 的加速 phase、runtime decision 與驗收標準。
+- `docs/repo-goal/02-v0-facts-and-hardening.md`: 下一階段 facts inventory、剩餘 UAT、coverage gap review、demo runbook 與 Phase 5 readiness decision。
 - `docs/memory/`: 專案決策、進度與下一步紀錄。
 - `AGENTS.md`: Agent 工作規則、測試要求與文件更新要求。
 
 ## 目前狀態
 
-目前狀態是 Slack Local File Search v0 已建立並用真實 Slack internal/test app 完成 live UAT。已包含 config validation、guarded direct local search、Slack `/agent find <query>` command handler、JSONL audit log、behavior-focused tests、Socket Mode setup 與 For Coding workspace demo notes。下一步可補 no-result、denylist、oversized file 的完整手動 UAT，或開始 Phase 5 local index cache。
+目前狀態是 Slack Local File Search v0 已建立並用真實 Slack internal/test app 完成 successful-search live UAT。已包含 config validation、guarded direct local search、Slack `/agent find <query>` command handler、JSONL audit log、behavior-focused tests、Socket Mode setup 與 For Coding workspace demo notes。下一階段是 `docs/repo-goal/02-v0-facts-and-hardening.md`：先完成 facts inventory、剩餘手動 UAT、coverage gap review 與 demo runbook，再決定是否進 Phase 5 local index cache。
