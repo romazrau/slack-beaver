@@ -37,4 +37,7 @@ Deferred work remains documented as later phases so the smaller plan does not lo
 
 - Slack Local File Search v0 skeleton exists.
 - Implemented config validation, guarded direct local search, Slack `/agent find <query>` command wiring, JSONL audit logging, and behavior-focused tests.
-- Next validation step is installing dependencies, running automated checks, and performing manual Slack UAT with an internal/test Slack app.
+- Automated checks passed with `npm test` and `npm run typecheck`.
+- A real internal/test Slack app named `Slack Beaver Local Agent` is configured in the `For Coding` workspace with Socket Mode and `/agent find <query>`.
+- Live Slack UAT passed for the successful-search path against the allowlisted local `docs` folder.
+- Remaining manual UAT should cover no-result, invalid query, denylist enforcement, oversized file skip, and agent-offline behavior.
