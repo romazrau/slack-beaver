@@ -158,3 +158,27 @@ Acceptance criteria:
 - `git diff --check` passes.
 - Remaining manual UAT results are documented.
 - Next implementation phase is explicitly selected or intentionally deferred.
+
+## Execution Results
+
+Execution date: 2026-06-28
+
+Completed:
+
+- Facts inventory updated in `docs/memory/v0-facts-hardening-results.md`.
+- Repeatable demo runbook added in `docs/runbooks/slack-local-file-search-v0.md`.
+- Fixture UAT passed for successful search, no result, denylist skip, oversized skip, and empty query rejection.
+- Audit log shape was inspected with fake UAT user/channel IDs and did not include full file contents.
+- `.env` was restored to the docs demo folder after fixture UAT and remained mode `600`.
+- Coverage gap review was documented.
+- Phase 5 was intentionally deferred.
+
+Blocked for live Slack UI in this execution:
+
+- Remaining Slack-visible UAT commands could not be sent because Chrome UI automation was unavailable in this turn.
+- The commands and expected results are documented in the runbook for manual execution.
+
+Decision:
+
+- Do not start SQLite local index cache yet.
+- Next practical work is Phase 4.5 demo hardening: finish Slack-visible UAT, decide invalid-command audit behavior, and replace ad hoc `launchctl submit` with either foreground-only documentation or a real LaunchAgent plist template.

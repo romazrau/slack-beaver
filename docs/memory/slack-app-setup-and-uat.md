@@ -119,6 +119,8 @@ launchctl remove slack-beaver-local-agent
 
 The launchctl job was verified connected to Slack Socket Mode.
 
+Later hardening found this should remain a demo convenience only. `launchctl submit` can create an identifiable label while the submitted process is alive, but it is not a robust daemon packaging solution. If `launchctl list slack-beaver-local-agent` cannot find the label, the job is not running. Foreground `npm run dev` remains the reliable v0 demo path until a real LaunchAgent plist template is added.
+
 ## Remaining Manual UAT
 
 The successful-search path is verified. The following manual checks remain useful before calling v0 fully demo-hardened:
