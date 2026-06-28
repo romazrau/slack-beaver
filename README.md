@@ -6,6 +6,8 @@ Slack Forge 是一個 Slack-based Local AI Ops Agent POC。專案目標是在三
 
 下一階段已加入 Slack-native App Home / Messages chat 入口。使用者可以在 Slack 左側「應用程式」點開 `Slack Beaver Local Agent`，在 Messages tab 直接輸入 `find <query>`。`/agent find <query>` slash command 仍保留。
 
+下一個尚未實作的規劃階段是 Local Memory + OpenAI Agent：Local Agent 會記住使用者允許讀取的 local folders，沒有特別指定路徑時使用已知 allowed folders，並透過受限 Tool Registry 讓 AI agent 協助處理訊息。這個階段已先完成文件與驗收標準規劃；目前 runtime 仍只支援既有 `find <query>` 搜尋。
+
 ## Local Agent Runtime 決策
 
 Slack bot 本身不能直接操作使用者電腦上的 OS folder。Slack 在本專案中只是 control surface；真正讀取本機資料夾的是使用者電腦上執行的 Local Agent process。
@@ -133,6 +135,29 @@ git status --short
 git diff --check
 ```
 
+本機搜尋測試資料：
+
+- `doc-test/` 提供可直接 allowlist 的 synthetic fixture corpus。
+- 內容包含詩歌、短篇散文、短劇、股市 CSV/Markdown、世界新聞風格 JSON/Markdown、編造對話與代辦事項。
+- 目錄從 `doc-test` 起算最深五層，方便驗證 nested folder traversal。
+- 所有 market data、news brief、conversation 與 task item 都是測試資料，不代表真實事實或投資建議。
+
+可用 `.env` 暫時設定：
+
+```env
+WATCHED_FOLDERS=/Users/romazrau/dev/slack-beaver/doc-test
+```
+
+可用查詢範例：
+
+```text
+find moonlit harbor
+find semiconductor revenue
+find monsoon vaccine corridor
+find Mira deployment checklist
+find TODO owner Priya
+```
+
 ## Slack Local File Search v0 Demo Flow
 
 1. 在 Slack app 啟用 Socket Mode，並建立 `/agent` slash command。
@@ -163,6 +188,40 @@ Slack app 需要啟用：
 - Bot scopes: `commands`, `chat:write`, `im:history`
 
 每次 App Home message search 會在 audit log 記錄 `source=app_home_message`。Slash command search 會記錄 `source=slash_command`。
+
+## Planned Local Memory And AI Agent
+
+這一節描述下一階段計畫，尚未實作。
+
+下一階段預計讓 Local Agent 保存本機記憶：
+
+- 第一次或沒有已知 folders 時，Slack App Home / chat 會提示使用者在本機設定允許讀取的資料夾。
+- 之後可以新增、列出、移除 allowed folder paths。
+- 使用者沒特別提及路徑時，agent 會使用 SQLite 中已知的 allowed folders。
+- App Home 只顯示狀態與 folder count；預設不顯示完整 local paths。
+
+AI provider 第一版預設為 OpenAI。AI token 是付費機密，不能透過 Slack DM、App Home message、文件或 audit log 傳遞。規劃中的 token setup 只允許在使用者電腦上透過 local CLI 完成，例如：
+
+```sh
+npm run agent:secrets:set-openai
+```
+
+規劃中的 folder setup 也只由 Local Agent 在本機驗證後保存，例如：
+
+```sh
+npm run agent:folders:add -- /absolute/path/to/folder
+npm run agent:folders:list
+npm run agent:folders:remove -- /absolute/path/to/folder
+```
+
+安全邊界：
+
+- Slack 仍只是 UI/control surface，不直接讀 OS folder。
+- Local Agent code 決定 folder permission，不交給 LLM 決定。
+- LLM 只能透過 allowlisted Tool Registry 調用工具。
+- 不做任意 shell command，不修改 local files。
+- Slack messages、local file content、LLM output 都視為 untrusted input。
+- 任何 prompt injection 試圖要求讀取 denylist/non-allowlisted paths、洩漏 token、或改寫 tool policy，都必須被拒絕。
 
 ## For Coding Workspace Setup Notes
 
@@ -243,13 +302,15 @@ launchctl remove slack-beaver-local-agent
 
 ## 文件導覽
 
+- `doc-test/`: Local file search synthetic fixture corpus, containing nested Markdown, TXT, CSV, and JSON files for manual validation.
 - `docs/repo-goal/00-poc.md`: 三天 POC 分析、架構建議、phase 規劃與驗收標準。
 - `docs/repo-goal/01-accelerated-local-file-search.md`: Slack Local File Search v0 的加速 phase、runtime decision 與驗收標準。
 - `docs/repo-goal/02-v0-facts-and-hardening.md`: 下一階段 facts inventory、剩餘 UAT、coverage gap review、demo runbook 與 Phase 5 readiness decision。
+- `docs/repo-goal/03-local-memory-and-ai-agent.md`: 下一階段 Local Memory、OpenAI token safety、Tool Registry guardrails 與 prompt-injection 驗收標準。
 - `docs/runbooks/slack-local-file-search-v0.md`: 可重跑的 v0 setup、foreground demo、optional launchctl demo、manual UAT 與 cleanup runbook。
 - `docs/memory/`: 專案決策、進度與下一步紀錄。
 - `AGENTS.md`: Agent 工作規則、測試要求與文件更新要求。
 
 ## 目前狀態
 
-目前狀態是 Slack Local File Search v0 已建立並用真實 Slack internal/test app 完成 successful-search live UAT。已包含 config validation、guarded direct local search、Slack `/agent find <query>` command handler、Slack App Home / Messages chat handler、JSONL audit log、behavior-focused tests、Socket Mode setup 與 For Coding workspace demo notes。`docs/repo-goal/02-v0-facts-and-hardening.md` 已執行 repo-verifiable hardening：fixture UAT、coverage gap review、demo runbook 與 Phase 5 deferral。下一步是設定 Slack app 的 App Home / Messages tab / Event Subscriptions 後，對 `find <query>` app chat 入口做 live UAT。
+目前狀態是 Slack Local File Search v0 已建立並用真實 Slack internal/test app 完成 live UAT。已包含 config validation、guarded direct local search、Slack `/agent find <query>` command handler、Slack App Home / Messages chat handler、JSONL audit log、behavior-focused tests、Socket Mode setup 與 For Coding workspace demo notes。`docs/repo-goal/02-v0-facts-and-hardening.md` 已執行 repo-verifiable hardening：fixture UAT、coverage gap review、demo runbook 與 Phase 5 deferral。下一步是依 `docs/repo-goal/03-local-memory-and-ai-agent.md` 實作 Local Memory、OpenAI token setup 與受限 agent Tool Registry。
