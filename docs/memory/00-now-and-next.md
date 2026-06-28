@@ -6,7 +6,8 @@
 - `docs/repo-goal/00-poc.md` defines the Slack-based Local AI Ops Agent three-day POC.
 - `docs/repo-goal/01-accelerated-local-file-search.md` narrows the immediate plan to a Slack bot that can locally search allowlisted files and explains the Local Agent runtime decision.
 - `docs/repo-goal/02-v0-facts-and-hardening.md` defines the next phase: facts inventory, remaining manual UAT, coverage gap review, demo runbook, and Phase 5 readiness decision.
-- `README.md` now describes the Local Agent runtime, Slack Socket Mode flow, setup, run, test, demo commands, For Coding workspace setup notes, daemon commands, and live UAT result.
+- `README.md` is now a compact entry point for starting the Local Agent server, running verification, seeing current features, and navigating deeper docs.
+- `docs/setup/slack-api-and-local-runtime.md` now owns Slack app settings, local `.env` setup, secret handling, local CLI setup commands, and optional `launchctl submit` demo notes.
 - `.gitignore` now protects local dependencies, build outputs, secrets, SQLite runtime files, logs, caches, and local OAuth/token artifacts.
 - Source code includes config validation, guarded direct local search, Slack `/agent find <query>` command handling, Slack App Home / Messages chat handling, and JSONL audit logging.
 - A real Slack app named `Slack Beaver Local Agent` exists in the `For Coding` workspace with Socket Mode enabled and `/agent find <query>` configured.
@@ -16,6 +17,7 @@
 - `doc-test/` now provides a synthetic local-search fixture corpus with nested Markdown, TXT, CSV, and JSON files for manual validation.
 - `launchctl submit` is documented as optional demo convenience only; foreground `npm run dev` remains the reliable v0 demo path.
 - `docs/memory/slack-app-home-chat.md` records the decision to use Slack-native App Home chat instead of a desktop app.
+- `docs/memory/readme-documentation-scope.md` records the decision to keep operational setup and planning details out of README.
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` now records the implemented Local Memory and OpenAI token safety slice.
 - `docs/repo-goal/04-openai-agent-runner.md` now defines the next phase for a guarded OpenAI-backed `ask <question>` flow.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
