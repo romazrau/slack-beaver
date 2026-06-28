@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { LocalMemoryStore, mergeUniquePaths } from "../src/localMemory.js";
-import { runLocalCli } from "../src/localCli.js";
+import { runLocalCli } from "../src/cli/localCli.js";
+import { LocalMemoryStore, mergeUniquePaths } from "../src/memory/localMemory.js";
 
 let tempDir: string;
 

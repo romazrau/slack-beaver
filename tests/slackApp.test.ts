@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDirectUserMessage } from "../src/slackApp.js";
+import { isDirectUserMessage } from "../src/slack/slackApp.js";
 
 describe("isDirectUserMessage", () => {
   it("accepts direct user messages", () => {

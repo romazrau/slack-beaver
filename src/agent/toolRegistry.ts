@@ -1,7 +1,7 @@
 import type { AgentCommandSource } from "./agentCommands.js";
-import type { AppConfig } from "./config.js";
-import { LocalMemoryStore } from "./localMemory.js";
-import { searchLocalFiles, type SearchResult } from "./localSearch.js";
+import type { AppConfig } from "../config/config.js";
+import { LocalMemoryStore } from "../memory/localMemory.js";
+import { searchLocalFiles, type SearchResult } from "../search/localSearch.js";
 
 export type ToolExecutionContext = {
   source: AgentCommandSource;

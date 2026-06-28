@@ -5,15 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "agent:folders:add": "tsx src/localCli.ts folders:add",
-    "agent:folders:list": "tsx src/localCli.ts folders:list",
-    "agent:folders:remove": "tsx src/localCli.ts folders:remove",
-    "agent:memory:reset": "tsx src/localCli.ts memory:reset",
-    "agent:secrets:set-openai": "tsx src/localCli.ts secrets:set-openai",
+    "agent:folders:add": "tsx src/cli/localCli.ts folders:add",
+    "agent:folders:list": "tsx src/cli/localCli.ts folders:list",
+    "agent:folders:remove": "tsx src/cli/localCli.ts folders:remove",
+    "agent:memory:reset": "tsx src/cli/localCli.ts memory:reset",
+    "agent:secrets:set-openai": "tsx src/cli/localCli.ts secrets:set-openai",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verify": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@slack/bolt": "^3.21.2",

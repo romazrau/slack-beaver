@@ -131,6 +131,13 @@ npm run dev
 ```sh
 npm test
 npm run typecheck
+npm run build
+```
+
+一次執行主要驗證：
+
+```sh
+npm run verify
 ```
 
 repo-level 檢查：
@@ -325,6 +332,14 @@ launchctl remove slack-beaver-local-agent
 ## 文件導覽
 
 - `doc-test/`: Local file search synthetic fixture corpus, containing nested Markdown, TXT, CSV, and JSON files for manual validation.
+- `src/agent/`: Slack text command execution and guarded tool registry path.
+- `src/cli/`: Local-only setup and maintenance CLI.
+- `src/config/`: Environment loading and configuration validation.
+- `src/memory/`: SQLite local memory store and memory helpers.
+- `src/observability/`: Audit logging.
+- `src/search/`: Read-only local file search and path guard logic.
+- `src/setup/`: Local folder and secret setup validation.
+- `src/slack/`: Slack Bolt app wiring, App Home view, onboarding copy, and Slack response formatting.
 - `docs/repo-goal/00-poc.md`: 三天 POC 分析、架構建議、phase 規劃與驗收標準。
 - `docs/repo-goal/01-accelerated-local-file-search.md`: Slack Local File Search v0 的加速 phase、runtime decision 與驗收標準。
 - `docs/repo-goal/02-v0-facts-and-hardening.md`: 下一階段 facts inventory、剩餘 UAT、coverage gap review、demo runbook 與 Phase 5 readiness decision。

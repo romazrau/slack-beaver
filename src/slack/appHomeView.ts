@@ -1,5 +1,5 @@
 import type { KnownBlock, View } from "@slack/bolt";
-import type { AppConfig } from "./config.js";
+import type { AppConfig } from "../config/config.js";
 import { formatSetupChecklist } from "./onboardingCopy.js";
 
 export type AppHomeState = {

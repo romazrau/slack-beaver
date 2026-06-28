@@ -2,8 +2,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { runAgentTextCommand } from "../src/agentCommands.js";
-import type { AppConfig } from "../src/config.js";
+import { runAgentTextCommand } from "../src/agent/agentCommands.js";
+import type { AppConfig } from "../src/config/config.js";
 
 let tempDir: string;
 

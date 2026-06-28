@@ -1,9 +1,9 @@
 import slackBolt from "@slack/bolt";
 import type { App as SlackBoltApp } from "@slack/bolt";
-import { runAgentTextCommand } from "./agentCommands.js";
+import { runAgentTextCommand } from "../agent/agentCommands.js";
+import type { AppConfig } from "../config/config.js";
+import { LocalMemoryStore, mergeUniquePaths } from "../memory/localMemory.js";
 import { buildAppHomeView } from "./appHomeView.js";
-import type { AppConfig } from "./config.js";
-import { LocalMemoryStore, mergeUniquePaths } from "./localMemory.js";
 
 export function createSlackApp(config: AppConfig): SlackBoltApp {
   if (!config.slack.botToken || !config.slack.appToken) {

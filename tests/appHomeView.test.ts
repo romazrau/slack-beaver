@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildAppHomeView } from "../src/appHomeView.js";
-import type { AppConfig } from "../src/config.js";
+import { buildAppHomeView } from "../src/slack/appHomeView.js";
+import type { AppConfig } from "../src/config/config.js";
 
 describe("buildAppHomeView", () => {
   it("shows local agent status without secrets or folder paths", () => {

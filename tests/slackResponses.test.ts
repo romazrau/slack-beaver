@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatSearchResponse, parseAgentCommand } from "../src/slackResponses.js";
+import { formatSearchResponse, parseAgentCommand } from "../src/slack/slackResponses.js";
 
 describe("parseAgentCommand", () => {
   it("parses find commands", () => {

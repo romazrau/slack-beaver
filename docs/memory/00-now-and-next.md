@@ -19,6 +19,7 @@
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` now records the implemented Local Memory and OpenAI token safety slice.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and deferred full OpenAI agent decisions.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
+- Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
 
 ## Validation Status
 
@@ -35,6 +36,7 @@
 - `doc-test/` directory depth was checked to stay within five levels from the fixture root.
 - Local Memory/token safety verification passed with automated tests and typecheck. Reset behavior requires local double confirmation and cannot be triggered directly from Slack. Full OpenAI API calls and LLM agent loop remain deferred.
 - Chrome live UAT passed for the initialized Local Memory state: App Home showed setup guidance and OpenAI token local-only status, `find Socket` returned folder setup guidance, `reset memory` returned local-only double-confirmation instructions, and a fake token-like message was refused with local CLI guidance. Follow-up copy now uses a clearer setup checklist and states that folders plus OpenAI token setup are prerequisites before enabling the AI agent. Computer Use instructions were read, but no direct Computer Use UI MCP was exposed in that turn.
+- Project cleanup typecheck passed after moving modules into responsibility-based folders. `npm run verify` is now the preferred local gate before future commits.
 
 ## Likely Next Work
 

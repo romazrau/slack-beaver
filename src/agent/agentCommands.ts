@@ -1,13 +1,13 @@
-import type { AppConfig } from "./config.js";
-import { writeAuditLog } from "./auditLog.js";
-import { LocalMemoryStore, mergeUniquePaths } from "./localMemory.js";
+import type { AppConfig } from "../config/config.js";
+import { LocalMemoryStore, mergeUniquePaths } from "../memory/localMemory.js";
+import { writeAuditLog } from "../observability/auditLog.js";
 import {
   formatNoFoldersGuidance,
   formatResetMemorySlackGuidance,
   formatTokenRefusalGuidance
-} from "./onboardingCopy.js";
-import { formatErrorResponse, formatSearchResponse, parseAgentCommand } from "./slackResponses.js";
-import { looksLikeAiToken } from "./secretSetup.js";
+} from "../slack/onboardingCopy.js";
+import { formatErrorResponse, formatSearchResponse, parseAgentCommand } from "../slack/slackResponses.js";
+import { looksLikeAiToken } from "../setup/secretSetup.js";
 import { runLocalSearchTool } from "./toolRegistry.js";
 
 export type AgentCommandSource = "slash_command" | "app_home_message";

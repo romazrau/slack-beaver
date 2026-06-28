@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { loadConfig } from "./config.js";
-import { createSlackApp } from "./slackApp.js";
+import { loadConfig } from "./config/config.js";
+import { createSlackApp } from "./slack/slackApp.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();

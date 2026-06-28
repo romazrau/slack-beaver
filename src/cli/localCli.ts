@@ -1,10 +1,10 @@
 import { stdin as input, stdout as output } from "node:process";
 import { pathToFileURL } from "node:url";
-import { loadConfig } from "./config.js";
-import { validateAllowedFolderInput } from "./folderSetup.js";
-import { LocalMemoryStore } from "./localMemory.js";
-import { formatResetCompletedGuidance, formatResetRefusalGuidance } from "./onboardingCopy.js";
-import { saveOpenAiToken } from "./secretSetup.js";
+import { loadConfig } from "../config/config.js";
+import { LocalMemoryStore } from "../memory/localMemory.js";
+import { formatResetCompletedGuidance, formatResetRefusalGuidance } from "../slack/onboardingCopy.js";
+import { validateAllowedFolderInput } from "../setup/folderSetup.js";
+import { saveOpenAiToken } from "../setup/secretSetup.js";
 
 type CliResult = {
   code: number;

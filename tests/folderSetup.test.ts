@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { validateAllowedFolderInput } from "../src/folderSetup.js";
+import { validateAllowedFolderInput } from "../src/setup/folderSetup.js";
 
 let tempDir: string;
 

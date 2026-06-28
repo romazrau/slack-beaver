@@ -1,4 +1,4 @@
-import type { SearchResult } from "./localSearch.js";
+import type { SearchResult } from "../search/localSearch.js";
 
 export type AgentCommand =
   | { type: "find"; query: string }
