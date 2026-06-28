@@ -11,6 +11,7 @@
 - Source code includes config validation, guarded direct local search, Slack `/agent find <query>` command handling, Slack App Home / Messages chat handling, and JSONL audit logging.
 - A real Slack app named `Slack Beaver Local Agent` exists in the `For Coding` workspace with Socket Mode enabled and `/agent find <query>` configured.
 - The same Slack app now has App Home Home tab, Messages tab, Event Subscriptions, bot events, and bot scopes configured for Slack-native app chat.
+- The Slack app uses `assets/slack-beaver-local-agent-avatar.png` as its app icon.
 - `docs/runbooks/slack-local-file-search-v0.md` now provides the repeatable v0 demo runbook.
 - `launchctl submit` is documented as optional demo convenience only; foreground `npm run dev` remains the reliable v0 demo path.
 - `docs/memory/slack-app-home-chat.md` records the decision to use Slack-native App Home chat instead of a desktop app.
@@ -26,6 +27,7 @@
 - Chrome-visible Slack UAT passed after Chrome was restarted: successful search, no-result search, invalid command, and Local Agent offline behavior.
 - Automated tests now cover the shared command executor, App Home view safety, audit `source`, and direct-message guard.
 - Chrome and Computer Use live UAT passed for App Home chat: Home tab rendered safe status, Messages tab `find Socket` returned local file results, invalid app message returned chat-specific usage, no-result query returned a clear no-result response, and audit log recorded `source=app_home_message`.
+- Chrome and Computer Use verified the updated app icon in Slack app chat and the sidebar.
 
 ## Likely Next Work
 

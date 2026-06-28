@@ -180,6 +180,7 @@ Slack app 需要啟用：
 - Event Subscriptions: enabled
 - Bot events: `app_home_opened`, `message.im`
 - OAuth scopes used for Slack-native UI: `commands`, `chat:write`, `im:history`
+- App icon asset: `assets/slack-beaver-local-agent-avatar.png`
 - Reinstall after App Home chat setup: completed
 
 機密處理規則：
@@ -238,6 +239,7 @@ launchctl remove slack-beaver-local-agent
 - Messages tab accepted `list tasks` and returned `Unsupported command. Usage: find <query>`.
 - Messages tab accepted a no-result query and returned a clear no-result response.
 - `logs/audit.jsonl` recorded App Home successful and no-result searches with `source=app_home_message`.
+- Slack app Basic Information uses `assets/slack-beaver-local-agent-avatar.png` as the app icon; Slack app chat and sidebar display the updated icon.
 
 ## 文件導覽
 

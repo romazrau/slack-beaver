@@ -57,6 +57,7 @@ Verified on 2026-06-28 in the `For Coding` workspace:
 - Event Subscriptions are enabled.
 - Bot events include `app_home_opened` and `message.im`.
 - Bot scopes include `commands`, `chat:write`, and `im:history`.
+- App icon uses `assets/slack-beaver-local-agent-avatar.png`.
 - The app was reinstalled after scope and event changes.
 - Actual token values remain only in local `.env` and were not documented.
 
@@ -73,3 +74,4 @@ Verified on 2026-06-28:
 - Sent a no-result query in the Messages tab.
 - Confirmed Slack replied with a clear no-result response.
 - Confirmed audit log records App Home searches with `source=app_home_message`.
+- Confirmed Slack app chat and sidebar render the updated app icon.
