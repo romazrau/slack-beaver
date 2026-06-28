@@ -18,7 +18,7 @@
 - `docs/memory/slack-app-home-chat.md` records the decision to use Slack-native App Home chat instead of a desktop app.
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` now records the implemented Local Memory and OpenAI token safety slice.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and deferred full OpenAI agent decisions.
-- Source code now includes SQLite local memory, folder setup CLI, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
+- Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
 
 ## Validation Status
 
@@ -33,7 +33,7 @@
 - Chrome and Computer Use live UAT passed for App Home chat: Home tab rendered safe status, Messages tab `find Socket` returned local file results, invalid app message returned chat-specific usage, no-result query returned a clear no-result response, and audit log recorded `source=app_home_message`.
 - Chrome and Computer Use verified the updated app icon in Slack app chat and the sidebar.
 - `doc-test/` directory depth was checked to stay within five levels from the fixture root.
-- Local Memory/token safety verification passed with automated tests and typecheck. Full OpenAI API calls and LLM agent loop remain deferred.
+- Local Memory/token safety verification passed with automated tests and typecheck. Reset behavior requires local double confirmation and cannot be triggered directly from Slack. Full OpenAI API calls and LLM agent loop remain deferred.
 
 ## Likely Next Work
 

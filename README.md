@@ -204,9 +204,18 @@ Local folder setup：
 npm run agent:folders:add -- /absolute/path/to/folder
 npm run agent:folders:list
 npm run agent:folders:remove -- /absolute/path/to/folder
+npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes
 ```
 
 Folder add 會驗證 absolute path、realpath、存在性、目錄型態、OS readable permission、`DENYLIST_FOLDERS`。如果沒有任何 known folders，App Home 和 chat search 會提示使用者用 local CLI 新增 folder，而不是直接失敗。
+
+Memory reset 是本機初始化工具，不會從 Slack 直接執行。Slack 中輸入 `reset memory` 只會回覆本機操作說明。真正 reset 必須在使用者電腦上執行完整雙重確認命令：
+
+```sh
+npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes
+```
+
+這會清空 local SQLite DB 中的 allowed folders、settings、conversation state、tool-call records 與 provider setup metadata，讓 bot 回到未設定 folders 的初始化狀態。它不會刪除 disk 上的 token file；若要更換 OpenAI token，請重新執行 `npm run agent:secrets:set-openai`。
 
 OpenAI provider 第一版只做 local token setup 與 metadata，不會把 token 送進 Slack 或 audit log。AI token 是付費機密，不能透過 Slack DM、App Home message、文件或 audit log 傳遞。請只在使用者電腦上透過 local CLI 設定：
 
@@ -317,4 +326,4 @@ launchctl remove slack-beaver-local-agent
 
 ## 目前狀態
 
-目前狀態是 Slack Local File Search v0 已建立並用真實 Slack internal/test app 完成 live UAT。已包含 config validation、guarded direct local search、Slack `/agent find <query>` command handler、Slack App Home / Messages chat handler、JSONL audit log、behavior-focused tests、Socket Mode setup 與 For Coding workspace demo notes。Local Memory 第一版已加入 SQLite allowed folders、local folder CLI、OpenAI token local setup、Slack token-like refusal、App Home setup guidance、以及 local search Tool Registry audit summary。下一步是接上真正的 OpenAI agent runner 與 prompt-injection fixture UAT。
+目前狀態是 Slack Local File Search v0 已建立並用真實 Slack internal/test app 完成 live UAT。已包含 config validation、guarded direct local search、Slack `/agent find <query>` command handler、Slack App Home / Messages chat handler、JSONL audit log、behavior-focused tests、Socket Mode setup 與 For Coding workspace demo notes。Local Memory 第一版已加入 SQLite allowed folders、local folder CLI、OpenAI token local setup、Slack token-like refusal、App Home setup guidance、local memory reset 雙重防呆、以及 local search Tool Registry audit summary。下一步是接上真正的 OpenAI agent runner 與 prompt-injection fixture UAT。

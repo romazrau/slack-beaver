@@ -47,6 +47,29 @@ describe("LocalMemoryStore", () => {
 
     store.close();
   });
+
+  it("resets local memory tables and reports deleted counts", () => {
+    const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
+
+    store.upsertAllowedFolder("/tmp/a");
+    store.setProviderTokenConfigured("openai", true);
+    store.recordToolCall({
+      source: "app_home_message",
+      toolName: "local_search",
+      inputSummary: "query length=6",
+      status: "success"
+    });
+
+    expect(store.resetAll()).toMatchObject({
+      allowedFolders: 1,
+      toolCalls: 1,
+      providerConfig: 1
+    });
+    expect(store.listAllowedFolders()).toEqual([]);
+    expect(store.getProviderConfig("openai")).toBeUndefined();
+
+    store.close();
+  });
 });
 
 describe("mergeUniquePaths", () => {
@@ -80,6 +103,35 @@ describe("runLocalCli", () => {
     });
     await expect(runLocalCli(["folders:remove", await fs.realpath(tempDir)])).resolves.toMatchObject({
       code: 0
+    });
+  });
+
+  it("requires double confirmation before resetting memory", async () => {
+    process.env = {
+      ...originalEnv,
+      SLACK_SOCKET_MODE_ENABLED: "false",
+      WATCHED_FOLDERS: "",
+      LOCAL_MEMORY_DB_PATH: path.join(tempDir, "cli-reset.sqlite"),
+      OPENAI_TOKEN_PATH: path.join(tempDir, "tokens", "openai.key")
+    };
+
+    await runLocalCli(["folders:add", tempDir]);
+    await expect(runLocalCli(["memory:reset"])).resolves.toMatchObject({
+      code: 1,
+      message: expect.stringContaining("Refusing to reset local memory")
+    });
+    await expect(runLocalCli(["folders:list"])).resolves.toMatchObject({
+      message: expect.stringContaining(await fs.realpath(tempDir))
+    });
+
+    await expect(
+      runLocalCli(["memory:reset", "--confirm", "RESET_LOCAL_MEMORY", "--yes"])
+    ).resolves.toMatchObject({
+      code: 0,
+      message: expect.stringContaining("Local memory reset complete")
+    });
+    await expect(runLocalCli(["folders:list"])).resolves.toMatchObject({
+      message: "No allowed folders saved."
     });
   });
 });

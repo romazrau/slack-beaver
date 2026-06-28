@@ -25,6 +25,14 @@ export type ToolCallAudit = {
   errorSummary?: string;
 };
 
+export type LocalMemoryResetResult = {
+  allowedFolders: number;
+  settings: number;
+  conversations: number;
+  toolCalls: number;
+  providerConfig: number;
+};
+
 export class LocalMemoryStore {
   private readonly db: Database.Database;
 
@@ -144,6 +152,28 @@ export class LocalMemoryStore {
       });
   }
 
+  resetAll(): LocalMemoryResetResult {
+    const counts = {
+      allowedFolders: this.countRows("allowed_folders"),
+      settings: this.countRows("settings"),
+      conversations: this.countRows("conversations"),
+      toolCalls: this.countRows("tool_calls"),
+      providerConfig: this.countRows("provider_config")
+    };
+
+    const reset = this.db.transaction(() => {
+      this.db.prepare("delete from allowed_folders").run();
+      this.db.prepare("delete from settings").run();
+      this.db.prepare("delete from conversations").run();
+      this.db.prepare("delete from tool_calls").run();
+      this.db.prepare("delete from provider_config").run();
+      this.db.prepare("delete from sqlite_sequence where name in ('conversations', 'tool_calls')").run();
+    });
+    reset();
+
+    return counts;
+  }
+
   private getAllowedFolder(folderPath: string): AllowedFolder {
     const row = this.db
       .prepare(
@@ -205,6 +235,13 @@ export class LocalMemoryStore {
         updated_at text not null
       );
     `);
+  }
+
+  private countRows(tableName: string): number {
+    const row = this.db.prepare(`select count(*) as count from ${tableName}`).get() as {
+      count: number;
+    };
+    return row.count;
   }
 }
 

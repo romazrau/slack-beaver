@@ -23,6 +23,14 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
     return "I cannot accept API keys or paid tokens in Slack. Configure secrets locally with `npm run agent:secrets:set-openai`.";
   }
 
+  if (isResetMemoryRequest(input.text)) {
+    return [
+      "Local memory reset is intentionally local-only.",
+      "To initialize this bot again, run `npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes` on this computer.",
+      "This deletes allowed folders, settings, conversation state, tool-call records, and provider setup metadata from the local SQLite DB. Token files are not deleted."
+    ].join("\n");
+  }
+
   const parsed = parseAgentCommand(input.text);
   if (parsed.type === "invalid") {
     return formatInvalidCommandReason(parsed.reason, input.source);
@@ -81,6 +89,10 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
   } finally {
     memoryStore?.close();
   }
+}
+
+function isResetMemoryRequest(text: string): boolean {
+  return text.trim().toLowerCase() === "reset memory";
 }
 
 function formatInvalidCommandReason(reason: string, source: AgentCommandSource): string {

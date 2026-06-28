@@ -125,4 +125,19 @@ describe("runAgentTextCommand", () => {
     expect(response).toContain("cannot accept API keys");
     await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
   });
+
+  it("does not reset memory from Slack and returns local-only guidance", async () => {
+    const config = buildConfig();
+    const response = await runAgentTextCommand({
+      text: "reset memory",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(response).toContain("local-only");
+    expect(response).toContain("RESET_LOCAL_MEMORY");
+    await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
+  });
 });

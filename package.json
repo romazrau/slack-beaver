@@ -8,6 +8,7 @@
     "agent:folders:add": "tsx src/localCli.ts folders:add",
     "agent:folders:list": "tsx src/localCli.ts folders:list",
     "agent:folders:remove": "tsx src/localCli.ts folders:remove",
+    "agent:memory:reset": "tsx src/localCli.ts memory:reset",
     "agent:secrets:set-openai": "tsx src/localCli.ts secrets:set-openai",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.build.json",

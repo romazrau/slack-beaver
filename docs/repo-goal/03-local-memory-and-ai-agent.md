@@ -66,6 +66,7 @@ Local CLI:
 npm run agent:folders:add -- /absolute/path/to/folder
 npm run agent:folders:list
 npm run agent:folders:remove -- /absolute/path/to/folder
+npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes
 npm run agent:secrets:set-openai
 ```
 
@@ -154,10 +155,12 @@ Completed:
   - `npm run agent:folders:add -- /absolute/path/to/folder`
   - `npm run agent:folders:list`
   - `npm run agent:folders:remove -- /absolute/path/to/folder`
+  - `npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes`
   - `npm run agent:secrets:set-openai`
 - Added folder validation for absolute path, realpath, directory type, OS read permission, and denylist checks.
 - Added local OpenAI token storage with `0600` permissions and provider metadata in SQLite.
 - Added Slack token-like message refusal before command parsing or audit logging.
+- Added local memory reset with double confirmation. Slack `reset memory` only returns local CLI guidance and does not delete records.
 - Added App Home setup guidance when no allowed folders are known.
 - Added Tool Registry `local_search` execution path with tool-call summaries in SQLite.
 - Kept existing slash command and App Home `find <query>` behavior compatible.

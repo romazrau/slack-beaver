@@ -61,14 +61,46 @@ export async function runLocalCli(argv: string[] = process.argv.slice(2)): Promi
       return { code: 0, message: "OpenAI token saved locally." };
     }
 
+    if (command === "memory:reset") {
+      return resetMemory(rest, store);
+    }
+
     return {
       code: 1,
       message:
-        "Usage: npm run agent:folders:add -- /absolute/path | npm run agent:folders:list | npm run agent:folders:remove -- /absolute/path | npm run agent:secrets:set-openai"
+        "Usage: npm run agent:folders:add -- /absolute/path | npm run agent:folders:list | npm run agent:folders:remove -- /absolute/path | npm run agent:secrets:set-openai | npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes"
     };
   } finally {
     store.close();
   }
+}
+
+function resetMemory(args: string[], store: LocalMemoryStore): CliResult {
+  const confirmIndex = args.indexOf("--confirm");
+  const confirmation = confirmIndex >= 0 ? args[confirmIndex + 1] : undefined;
+  const hasYes = args.includes("--yes");
+
+  if (confirmation !== "RESET_LOCAL_MEMORY" || !hasYes) {
+    return {
+      code: 1,
+      message: [
+        "Refusing to reset local memory without double confirmation.",
+        "This deletes allowed folders, settings, conversation state, tool-call records, and provider setup metadata from the local SQLite DB.",
+        "It does not delete token files on disk.",
+        "Run exactly: npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes"
+      ].join("\n")
+    };
+  }
+
+  const counts = store.resetAll();
+  return {
+    code: 0,
+    message: [
+      "Local memory reset complete.",
+      `Deleted records: allowed_folders=${counts.allowedFolders}, settings=${counts.settings}, conversations=${counts.conversations}, tool_calls=${counts.toolCalls}, provider_config=${counts.providerConfig}.`,
+      "The bot is initialized again; reopen App Home or send a message to see setup guidance."
+    ].join("\n")
+  };
 }
 
 async function readSecret(prompt: string): Promise<string> {

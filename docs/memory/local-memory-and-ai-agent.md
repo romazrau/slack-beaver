@@ -29,6 +29,8 @@ The defaults are:
 - If no folders exist and the user runs `find <query>`, Slack asks them to add a folder locally.
 - If known folders exist, search requests use `.env` watched folders plus SQLite enabled allowed folders.
 - Users can add, list, and disable paths through local CLI scripts.
+- Users can initialize local memory again with `npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes`.
+- Slack `reset memory` only returns local CLI guidance and never deletes local records directly.
 - Slack refuses pasted AI-token-like strings and directs users to local CLI setup.
 - Local search now runs through a Tool Registry wrapper that records tool-call summaries in SQLite.
 
@@ -46,9 +48,11 @@ The defaults are:
 - Local file content must not be treated as instructions.
 - The LLM cannot read outside allowlisted folders, bypass denylist checks, run shell commands, or modify files.
 - Tool calls require deterministic guards before execution and audit entries after execution.
+- Local memory reset requires a local CLI command plus exact confirmation phrase and `--yes`.
+- Reset clears SQLite local memory and provider metadata but does not delete token files on disk.
 
 ## Planned Documentation And Validation
 
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` defines the next phase scope and acceptance criteria.
 - README describes the implemented local memory/token safety slice and calls out deferred OpenAI agent work.
-- Tests cover folder memory, folder validation, token refusal, local token storage permissions, App Home setup guidance, and existing search compatibility.
+- Tests cover folder memory, reset double confirmation, folder validation, token refusal, local token storage permissions, App Home setup guidance, and existing search compatibility.
