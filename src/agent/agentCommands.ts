@@ -8,6 +8,7 @@ import {
 } from "../slack/onboardingCopy.js";
 import { formatErrorResponse, formatSearchResponse, parseAgentCommand } from "../slack/slackResponses.js";
 import { looksLikeAiToken } from "../setup/secretSetup.js";
+import { runAgentQuestion, type AgentModelClient } from "./agentRunner.js";
 import { runLocalSearchTool } from "./toolRegistry.js";
 
 export type AgentCommandSource = "slash_command" | "app_home_message";
@@ -18,6 +19,7 @@ export type RunAgentTextCommandInput = {
   channelId: string;
   source: AgentCommandSource;
   config: AppConfig;
+  modelClient?: AgentModelClient;
   logger?: {
     error: (message: string) => void;
   };
@@ -55,6 +57,27 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
         watchedFolders
       }
     };
+
+    if (parsed.type === "ask") {
+      const answer = await runAgentQuestion({
+        question: parsed.question,
+        source: input.source,
+        config,
+        memoryStore,
+        modelClient: input.modelClient
+      });
+      await writeAuditLog(input.config.auditLogPath, {
+        timestamp: new Date().toISOString(),
+        slackUserId: input.slackUserId,
+        channelId: input.channelId,
+        query: parsed.question,
+        resultCount: answer.toolCallCount,
+        status: "success",
+        source: input.source
+      });
+      return answer.answer;
+    }
+
     const results = await runLocalSearchTool(parsed.query, {
       source: input.source,
       config,
@@ -77,7 +100,7 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
       timestamp: new Date().toISOString(),
       slackUserId: input.slackUserId,
       channelId: input.channelId,
-      query: parsed.query,
+      query: parsed.type === "ask" ? parsed.question : parsed.query,
       resultCount: 0,
       status: "error",
       source: input.source,
@@ -98,5 +121,7 @@ function formatInvalidCommandReason(reason: string, source: AgentCommandSource):
     return reason;
   }
 
-  return reason.replaceAll("/agent find <query>", "find <query>");
+  return reason
+    .replaceAll("/agent find <query>", "find <query>")
+    .replaceAll("/agent ask <question>", "ask <question>");
 }

@@ -18,8 +18,9 @@
 - `docs/memory/slack-app-home-chat.md` records the decision to use Slack-native App Home chat instead of a desktop app.
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` now records the implemented Local Memory and OpenAI token safety slice.
 - `docs/repo-goal/04-openai-agent-runner.md` now defines the next phase for a guarded OpenAI-backed `ask <question>` flow.
-- `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and deferred full OpenAI agent decisions.
+- `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
+- Source code now includes a guarded OpenAI-backed `ask <question>` runner that can only use validated Tool Registry `local_search` calls.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
 
 ## Validation Status
@@ -35,14 +36,15 @@
 - Chrome and Computer Use live UAT passed for App Home chat: Home tab rendered safe status, Messages tab `find Socket` returned local file results, invalid app message returned chat-specific usage, no-result query returned a clear no-result response, and audit log recorded `source=app_home_message`.
 - Chrome and Computer Use verified the updated app icon in Slack app chat and the sidebar.
 - `doc-test/` directory depth was checked to stay within five levels from the fixture root.
-- Local Memory/token safety verification passed with automated tests and typecheck. Reset behavior requires local double confirmation and cannot be triggered directly from Slack. Full OpenAI API calls and LLM agent loop remain deferred.
-- Chrome live UAT passed for the initialized Local Memory state: App Home showed setup guidance and OpenAI token local-only status, `find Socket` returned folder setup guidance, `reset memory` returned local-only double-confirmation instructions, and a fake token-like message was refused with local CLI guidance. Follow-up copy now uses a clearer setup checklist and states that folders plus OpenAI token setup are prerequisites before enabling the AI agent. Computer Use instructions were read, but no direct Computer Use UI MCP was exposed in that turn.
+- Local Memory/token safety verification passed with automated tests and typecheck. Reset behavior requires local double confirmation and cannot be triggered directly from Slack.
+- Chrome live UAT passed for the initialized Local Memory state: App Home showed setup guidance and OpenAI token local-only status, `find Socket` returned folder setup guidance, `reset memory` returned local-only double-confirmation instructions, and a fake token-like message was refused with local CLI guidance. Follow-up copy now uses a clearer setup checklist and states that folders plus OpenAI token setup are prerequisites before using AI answers. Computer Use instructions were read, but no direct Computer Use UI MCP was exposed in that turn.
 - Project cleanup typecheck passed after moving modules into responsibility-based folders. `npm run verify` is now the preferred local gate before future commits.
+- OpenAI agent runner automated validation covers fake-client `local_search`, unknown tool rejection, malformed input rejection, token-file permission checks, and existing `find` compatibility. Live Slack/OpenAI UAT remains pending.
 
 ## Likely Next Work
 
-- Add an OpenAI-backed agent runner that can only use guarded Tool Registry actions.
-- Add prompt-injection fixtures and tests before enabling LLM-selected tool calls in Slack.
+- Run live Slack UAT for `ask <question>` with a real local OpenAI token.
+- Expand prompt-injection fixtures beyond the current unknown-tool and malformed-input tests.
 - Decide whether invalid `/agent` and invalid App Home message attempts should be audited.
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.
 - Keep Phase 5 local index cache deferred until v0 Slack-visible UAT and daemon/runbook gaps are closed.

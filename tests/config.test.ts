@@ -20,6 +20,10 @@ describe("loadConfig", () => {
     expect(config.localFiles.maxFileBytes).toBe(1234);
     expect(config.localFiles.maxResults).toBe(7);
     expect(config.localMemory.enabled).toBe(false);
+    expect(config.ai).toEqual({
+      openAiModel: "gpt-4.1-mini",
+      maxToolTurns: 2
+    });
     expect(config.auditLogPath).toBe("./tmp/audit.jsonl");
   });
 
@@ -52,6 +56,19 @@ describe("loadConfig", () => {
       enabled: true,
       dbPath: "./tmp/memory.sqlite",
       openAiTokenPath: "./tokens/openai.key"
+    });
+  });
+
+  it("loads AI model and tool-turn settings", () => {
+    const config = loadConfig({
+      SLACK_SOCKET_MODE_ENABLED: "false",
+      OPENAI_MODEL: "gpt-test",
+      MAX_AGENT_TOOL_TURNS: "3"
+    });
+
+    expect(config.ai).toEqual({
+      openAiModel: "gpt-test",
+      maxToolTurns: 3
     });
   });
 });

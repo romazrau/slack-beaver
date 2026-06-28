@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { looksLikeAiToken, saveOpenAiToken } from "../src/setup/secretSetup.js";
+import { loadOpenAiToken, looksLikeAiToken, saveOpenAiToken } from "../src/setup/secretSetup.js";
 
 let tempDir: string;
 
@@ -28,5 +28,15 @@ describe("secret setup", () => {
     const stat = await fs.stat(tokenPath);
     expect(stat.mode & 0o777).toBe(0o600);
     await expect(fs.readFile(tokenPath, "utf8")).resolves.toBe(`${fakeToken}\n`);
+    await expect(loadOpenAiToken(tokenPath)).resolves.toBe(fakeToken);
+  });
+
+  it("rejects OpenAI token files with broad permissions", async () => {
+    const tokenPath = path.join(tempDir, "tokens", "openai.key");
+    await fs.mkdir(path.dirname(tokenPath), { recursive: true });
+    await fs.writeFile(tokenPath, `sk-${"1".repeat(30)}\n`, "utf8");
+    await fs.chmod(tokenPath, 0o644);
+
+    await expect(loadOpenAiToken(tokenPath)).rejects.toThrow(/permissions/);
   });
 });

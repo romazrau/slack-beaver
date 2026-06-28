@@ -9,10 +9,17 @@ describe("parseAgentCommand", () => {
     });
   });
 
+  it("parses ask commands", () => {
+    expect(parseAgentCommand("ask what does the checklist say?")).toEqual({
+      type: "ask",
+      question: "what does the checklist say?"
+    });
+  });
+
   it("rejects unsupported commands", () => {
     expect(parseAgentCommand("list tasks")).toEqual({
       type: "invalid",
-      reason: "Unsupported command. Usage: /agent find <query>"
+      reason: "Unsupported command. Usage: /agent find <query> or /agent ask <question>"
     });
   });
 });

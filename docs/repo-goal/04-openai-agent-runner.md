@@ -267,3 +267,41 @@ must remain usable even when OpenAI setup is incomplete or model calls fail.
 - `npm run verify` passes.
 - Manual Slack UAT result is recorded in `docs/memory/`.
 - Deferred items are explicitly carried forward in `docs/memory/00-now-and-next.md`.
+
+## Execution Results
+
+Execution date: 2026-06-28
+
+Completed:
+
+- Added official `openai` SDK dependency.
+- Added `OPENAI_MODEL` and `MAX_AGENT_TOOL_TURNS` configuration.
+- Extended command parsing for `ask <question>` while preserving `find <query>`.
+- Added OpenAI token-file loading with owner-only permission validation.
+- Added `AgentModelClient` interface and fake-client behavior tests.
+- Added production OpenAI Responses API adapter behind the model-client interface.
+- Added bounded agent runner with default maximum of two model tool-call turns.
+- Added strict `local_search` function tool schema for OpenAI tool calling.
+- Added Tool Registry validation for unknown tools, malformed input, extra fields,
+  empty query, and rejected model-requested tool calls.
+- Added setup gating for missing allowed folders and missing OpenAI provider/token setup.
+- Added audit entries for successful `ask` requests without full document text.
+- Kept deterministic `find <query>` behavior compatible.
+
+Verified with automated tests:
+
+- `ask <question>` parsing.
+- OpenAI setup guidance when provider metadata is missing.
+- Fake model `local_search` flow with bounded tool output.
+- Unknown model-requested tool rejection.
+- Malformed `local_search` input rejection.
+- Token file permission validation.
+- Existing `find` behavior.
+
+Deferred:
+
+- Live Slack UAT with a real OpenAI token.
+- Larger prompt-injection fixture corpus.
+- AI summary memory.
+- Multi-provider routing.
+- Embeddings or local index cache.

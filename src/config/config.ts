@@ -17,6 +17,10 @@ export type AppConfig = {
     dbPath: string;
     openAiTokenPath: string;
   };
+  ai: {
+    openAiModel: string;
+    maxToolTurns: number;
+  };
   auditLogPath: string;
 };
 
@@ -27,6 +31,8 @@ const DEFAULT_MAX_RESULTS = 5;
 const DEFAULT_AUDIT_LOG_PATH = "./logs/audit.jsonl";
 const DEFAULT_LOCAL_MEMORY_DB_PATH = "./data/slack-beaver.sqlite";
 const DEFAULT_OPENAI_TOKEN_PATH = "./tokens/openai.key";
+const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
+const DEFAULT_MAX_AGENT_TOOL_TURNS = 2;
 
 export function loadConfig(env: Env = process.env): AppConfig {
   const socketModeEnabled = parseBoolean(env.SLACK_SOCKET_MODE_ENABLED, true);
@@ -42,6 +48,11 @@ export function loadConfig(env: Env = process.env): AppConfig {
     env.MAX_SEARCH_RESULTS,
     DEFAULT_MAX_RESULTS,
     "MAX_SEARCH_RESULTS"
+  );
+  const maxToolTurns = parsePositiveInteger(
+    env.MAX_AGENT_TOOL_TURNS,
+    DEFAULT_MAX_AGENT_TOOL_TURNS,
+    "MAX_AGENT_TOOL_TURNS"
   );
 
   const errors: string[] = [];
@@ -79,6 +90,10 @@ export function loadConfig(env: Env = process.env): AppConfig {
       enabled: localMemoryEnabled,
       dbPath: env.LOCAL_MEMORY_DB_PATH ?? DEFAULT_LOCAL_MEMORY_DB_PATH,
       openAiTokenPath: env.OPENAI_TOKEN_PATH ?? DEFAULT_OPENAI_TOKEN_PATH
+    },
+    ai: {
+      openAiModel: env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL,
+      maxToolTurns
     },
     auditLogPath: env.AUDIT_LOG_PATH ?? DEFAULT_AUDIT_LOG_PATH
   };

@@ -21,6 +21,10 @@ describe("buildAppHomeView", () => {
         dbPath: "./data/test.sqlite",
         openAiTokenPath: "./tokens/openai.key"
       },
+      ai: {
+        openAiModel: "test-model",
+        maxToolTurns: 2
+      },
       auditLogPath: "./logs/audit.jsonl"
     };
 
@@ -53,6 +57,10 @@ describe("buildAppHomeView", () => {
         dbPath: "./data/test.sqlite",
         openAiTokenPath: "./tokens/openai.key"
       },
+      ai: {
+        openAiModel: "test-model",
+        maxToolTurns: 2
+      },
       auditLogPath: "./logs/audit.jsonl"
     };
 
@@ -62,7 +70,7 @@ describe("buildAppHomeView", () => {
     expect(serialized).toContain("npm run agent:folders:add");
     expect(serialized).toContain("npm run agent:folders:list");
     expect(serialized).toContain("npm run agent:secrets:set-openai");
-    expect(serialized).toContain("AI agent can be enabled");
+    expect(serialized).toContain("ask <question>");
     expect(serialized).toContain("OpenAI token");
   });
 });

@@ -2,25 +2,32 @@ import type { SearchResult } from "../search/localSearch.js";
 
 export type AgentCommand =
   | { type: "find"; query: string }
+  | { type: "ask"; question: string }
   | { type: "invalid"; reason: string };
 
 export function parseAgentCommand(text: string): AgentCommand {
   const trimmed = text.trim();
   if (!trimmed) {
-    return { type: "invalid", reason: "Usage: /agent find <query>" };
+    return { type: "invalid", reason: formatUsage() };
   }
 
   const [command, ...rest] = trimmed.split(/\s+/);
-  if (command !== "find") {
-    return { type: "invalid", reason: "Unsupported command. Usage: /agent find <query>" };
+  if (command !== "find" && command !== "ask") {
+    return { type: "invalid", reason: `Unsupported command. ${formatUsage()}` };
   }
 
-  const query = rest.join(" ").trim();
-  if (!query) {
-    return { type: "invalid", reason: "Search query cannot be empty. Usage: /agent find <query>" };
+  const value = rest.join(" ").trim();
+  if (!value) {
+    return {
+      type: "invalid",
+      reason:
+        command === "find"
+          ? "Search query cannot be empty. Usage: /agent find <query>"
+          : "Question cannot be empty. Usage: /agent ask <question>"
+    };
   }
 
-  return { type: "find", query };
+  return command === "find" ? { type: "find", query: value } : { type: "ask", question: value };
 }
 
 export function formatSearchResponse(query: string, results: SearchResult[]): string {
@@ -43,7 +50,15 @@ export function formatSearchResponse(query: string, results: SearchResult[]): st
 }
 
 export function formatErrorResponse(message: string): string {
-  return `Local file search failed: ${escapeSlackText(message)}`;
+  return `Local agent failed: ${escapeSlackText(message)}`;
+}
+
+export function formatAgentAnswerResponse(answer: string): string {
+  return escapeSlackText(answer);
+}
+
+function formatUsage(): string {
+  return "Usage: /agent find <query> or /agent ask <question>";
 }
 
 function escapeSlackText(value: string): string {

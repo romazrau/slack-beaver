@@ -51,7 +51,7 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
       type: "section",
       text: {
         type: "mrkdwn",
-        text: "*Chat command*\nOpen the Messages tab and type `find <query>`. Type `reset memory` to see local reset instructions."
+        text: "*Chat command*\nOpen the Messages tab and type `find <query>` or `ask <question>`. Type `reset memory` to see local reset instructions."
       }
     },
     ...setupBlocks,
@@ -73,7 +73,7 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
       elements: [
         {
           type: "mrkdwn",
-          text: "Secrets and token values are never accepted in Slack. Configure folders and OpenAI locally before enabling the AI agent."
+          text: "Secrets and token values are never accepted in Slack. Configure folders and OpenAI locally before using AI answers."
         }
       ]
     }

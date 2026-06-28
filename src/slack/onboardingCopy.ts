@@ -4,8 +4,8 @@ export function formatSetupChecklist(): string {
     "1. Add folders I may read: `npm run agent:folders:add -- /absolute/path/to/folder`",
     "2. Check saved folders: `npm run agent:folders:list`",
     "3. Add OpenAI token locally: `npm run agent:secrets:set-openai`",
-    "4. Return to Slack and type `find <query>`.",
-    "After folders and token are configured, the AI agent can be enabled in the next phase."
+    "4. Return to Slack and type `find <query>` or `ask <question>`.",
+    "After folders and token are configured, `ask <question>` can use the guarded local search tool."
   ].join("\n");
 }
 
@@ -27,7 +27,7 @@ export function formatResetMemorySlackGuidance(): string {
     "",
     "This clears allowed folders, settings, conversation state, tool-call records, and provider setup metadata from the local SQLite DB. Token files are kept.",
     "",
-    "After reset, I will ask you to set folders and the OpenAI token again before the AI agent can be enabled."
+    "After reset, I will ask you to set folders and the OpenAI token again before `ask <question>` can use the guarded local search tool."
   ].join("\n");
 }
 
@@ -36,7 +36,16 @@ export function formatTokenRefusalGuidance(): string {
     "I cannot accept API keys or paid tokens in Slack.",
     "Please set the OpenAI token locally on this computer:",
     "`npm run agent:secrets:set-openai`",
-    "After the token is saved and at least one folder is allowed, the AI agent can be enabled in the next phase."
+    "After the token is saved and at least one folder is allowed, `ask <question>` can use the guarded local search tool."
+  ].join("\n");
+}
+
+export function formatOpenAiSetupGuidance(): string {
+  return [
+    "The AI agent is not ready because the OpenAI token is not configured locally.",
+    "Please set it on this computer:",
+    "`npm run agent:secrets:set-openai`",
+    "I cannot accept API keys or paid tokens in Slack."
   ].join("\n");
 }
 
