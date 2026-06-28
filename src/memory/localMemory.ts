@@ -25,6 +25,39 @@ export type ToolCallAudit = {
   errorSummary?: string;
 };
 
+export type ConversationTurnKind = "full" | "summary";
+
+export type ConversationTurn = {
+  id: number;
+  slackUserId: string;
+  channelId: string;
+  threadTs: string | null;
+  kind: ConversationTurnKind;
+  userText: string | null;
+  assistantReply: string;
+  source: string;
+  toolCallSummary: string | null;
+  createdAt: string;
+};
+
+export type ConversationTurnInput = {
+  slackUserId: string;
+  channelId: string;
+  threadTs?: string;
+  userText: string;
+  assistantReply: string;
+  source: string;
+  toolCallSummary?: string;
+};
+
+export type ConversationSummaryInput = {
+  slackUserId: string;
+  channelId: string;
+  threadTs?: string;
+  summary: string;
+  source: string;
+};
+
 export type LocalMemoryResetResult = {
   allowedFolders: number;
   settings: number;
@@ -165,13 +198,115 @@ export class LocalMemoryStore {
       this.db.prepare("delete from allowed_folders").run();
       this.db.prepare("delete from settings").run();
       this.db.prepare("delete from conversations").run();
+      this.db.prepare("delete from conversation_turns").run();
       this.db.prepare("delete from tool_calls").run();
       this.db.prepare("delete from provider_config").run();
-      this.db.prepare("delete from sqlite_sequence where name in ('conversations', 'tool_calls')").run();
+      this.db
+        .prepare("delete from sqlite_sequence where name in ('conversations', 'conversation_turns', 'tool_calls')")
+        .run();
     });
     reset();
 
     return counts;
+  }
+
+  appendConversationTurn(input: ConversationTurnInput): ConversationTurn {
+    const now = new Date().toISOString();
+    this.ensureConversation(input.slackUserId, input.channelId, input.threadTs ?? null, now);
+    const result = this.db
+      .prepare(
+        `insert into conversation_turns
+          (slack_user_id, channel_id, thread_ts, kind, user_text, assistant_reply, source, tool_call_summary, created_at)
+         values
+          (@slackUserId, @channelId, @threadTs, 'full', @userText, @assistantReply, @source, @toolCallSummary, @createdAt)`
+      )
+      .run({
+        slackUserId: input.slackUserId,
+        channelId: input.channelId,
+        threadTs: input.threadTs ?? null,
+        userText: input.userText,
+        assistantReply: input.assistantReply,
+        source: input.source,
+        toolCallSummary: input.toolCallSummary ?? null,
+        createdAt: now
+      });
+    return this.getConversationTurn(Number(result.lastInsertRowid));
+  }
+
+  upsertConversationSummary(input: ConversationSummaryInput): ConversationTurn {
+    const now = new Date().toISOString();
+    this.ensureConversation(input.slackUserId, input.channelId, input.threadTs ?? null, now, input.summary);
+    this.db
+      .prepare(
+        `delete from conversation_turns
+         where slack_user_id = @slackUserId
+           and channel_id = @channelId
+           and coalesce(thread_ts, '') = coalesce(@threadTs, '')
+           and kind = 'summary'`
+      )
+      .run({
+        slackUserId: input.slackUserId,
+        channelId: input.channelId,
+        threadTs: input.threadTs ?? null
+      });
+    const result = this.db
+      .prepare(
+        `insert into conversation_turns
+          (slack_user_id, channel_id, thread_ts, kind, user_text, assistant_reply, source, tool_call_summary, created_at)
+         values
+          (@slackUserId, @channelId, @threadTs, 'summary', null, @assistantReply, @source, null, @createdAt)`
+      )
+      .run({
+        slackUserId: input.slackUserId,
+        channelId: input.channelId,
+        threadTs: input.threadTs ?? null,
+        assistantReply: input.summary,
+        source: input.source,
+        createdAt: now
+      });
+    return this.getConversationTurn(Number(result.lastInsertRowid));
+  }
+
+  listConversationTurns(slackUserId: string, channelId: string, threadTs?: string): ConversationTurn[] {
+    const rows = this.db
+      .prepare(
+        `select id,
+                slack_user_id as slackUserId,
+                channel_id as channelId,
+                thread_ts as threadTs,
+                kind,
+                user_text as userText,
+                assistant_reply as assistantReply,
+                source,
+                tool_call_summary as toolCallSummary,
+                created_at as createdAt
+         from conversation_turns
+         where slack_user_id = @slackUserId
+           and channel_id = @channelId
+           and coalesce(thread_ts, '') = coalesce(@threadTs, '')
+         order by id asc`
+      )
+      .all({
+        slackUserId,
+        channelId,
+        threadTs: threadTs ?? null
+      }) as ConversationTurn[];
+
+    return rows;
+  }
+
+  deleteConversationTurns(ids: number[]): void {
+    if (ids.length === 0) {
+      return;
+    }
+
+    const remove = this.db.transaction((turnIds: number[]) => {
+      const statement = this.db.prepare("delete from conversation_turns where id = ?");
+      for (const id of turnIds) {
+        statement.run(id);
+      }
+    });
+    remove(ids);
   }
 
   private getAllowedFolder(folderPath: string): AllowedFolder {
@@ -218,6 +353,19 @@ export class LocalMemoryStore {
         updated_at text not null
       );
 
+      create table if not exists conversation_turns (
+        id integer primary key autoincrement,
+        slack_user_id text not null,
+        channel_id text not null,
+        thread_ts text,
+        kind text not null,
+        user_text text,
+        assistant_reply text not null,
+        source text not null,
+        tool_call_summary text,
+        created_at text not null
+      );
+
       create table if not exists tool_calls (
         id integer primary key autoincrement,
         source text not null,
@@ -235,6 +383,78 @@ export class LocalMemoryStore {
         updated_at text not null
       );
     `);
+  }
+
+  private ensureConversation(
+    slackUserId: string,
+    channelId: string,
+    threadTs: string | null,
+    updatedAt: string,
+    stateSummary?: string
+  ): void {
+    const existing = this.db
+      .prepare(
+        `select id
+         from conversations
+         where slack_user_id = @slackUserId
+           and channel_id = @channelId
+           and coalesce(thread_ts, '') = coalesce(@threadTs, '')`
+      )
+      .get({ slackUserId, channelId, threadTs }) as { id: number } | undefined;
+
+    if (existing) {
+      this.db
+        .prepare(
+          `update conversations
+           set state_summary = coalesce(@stateSummary, state_summary),
+               updated_at = @updatedAt
+           where id = @id`
+        )
+        .run({
+          id: existing.id,
+          stateSummary: stateSummary ?? null,
+          updatedAt
+        });
+      return;
+    }
+
+    this.db
+      .prepare(
+        `insert into conversations (slack_user_id, channel_id, thread_ts, state_summary, updated_at)
+         values (@slackUserId, @channelId, @threadTs, @stateSummary, @updatedAt)`
+      )
+      .run({
+        slackUserId,
+        channelId,
+        threadTs,
+        stateSummary: stateSummary ?? null,
+        updatedAt
+      });
+  }
+
+  private getConversationTurn(id: number): ConversationTurn {
+    const row = this.db
+      .prepare(
+        `select id,
+                slack_user_id as slackUserId,
+                channel_id as channelId,
+                thread_ts as threadTs,
+                kind,
+                user_text as userText,
+                assistant_reply as assistantReply,
+                source,
+                tool_call_summary as toolCallSummary,
+                created_at as createdAt
+         from conversation_turns
+         where id = ?`
+      )
+      .get(id) as ConversationTurn | undefined;
+
+    if (!row) {
+      throw new Error(`Conversation turn was not saved: ${id}`);
+    }
+
+    return row;
   }
 
   private countRows(tableName: string): number {

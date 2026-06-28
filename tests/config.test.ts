@@ -22,7 +22,9 @@ describe("loadConfig", () => {
     expect(config.localMemory.enabled).toBe(false);
     expect(config.ai).toEqual({
       openAiModel: "gpt-4.1-mini",
-      maxToolTurns: 2
+      maxToolTurns: 2,
+      maxConversationFullTurns: 8,
+      conversationRecentTurnsAfterSummary: 4
     });
     expect(config.auditLogPath).toBe("./tmp/audit.jsonl");
   });
@@ -63,12 +65,16 @@ describe("loadConfig", () => {
     const config = loadConfig({
       SLACK_SOCKET_MODE_ENABLED: "false",
       OPENAI_MODEL: "gpt-test",
-      MAX_AGENT_TOOL_TURNS: "3"
+      MAX_AGENT_TOOL_TURNS: "3",
+      MAX_CONVERSATION_FULL_TURNS: "6",
+      CONVERSATION_RECENT_TURNS_AFTER_SUMMARY: "2"
     });
 
     expect(config.ai).toEqual({
       openAiModel: "gpt-test",
-      maxToolTurns: 3
+      maxToolTurns: 3,
+      maxConversationFullTurns: 6,
+      conversationRecentTurnsAfterSummary: 2
     });
   });
 });

@@ -25,6 +25,24 @@ The planned defaults are:
 - Tool Registry remains the only execution boundary.
 - The initial agent-readable tool catalog exposes only `local_search(query: string)`.
 
-## Result
+## Implementation Result
 
-The implementation boundary is now documented before runtime changes. The next code phase can focus on routing, conversation persistence, summarization, prompt/tool catalog wiring, and tests.
+Implemented on 2026-06-29.
+
+Changes:
+
+- App DM general text now routes to natural conversation mode when local OpenAI token setup is complete.
+- Slash commands remain explicit and still require `/agent find <query>` or `/agent ask <question>`.
+- Token-like Slack messages and `reset memory` keep their refusal/guidance precedence before persistence or model calls.
+- SQLite now stores full conversation turns and summary turns in `conversation_turns`.
+- Conversation context sends up to 8 full turns before summarization.
+- When full turns exceed 8, the oldest 8 full turns are summarized into one safe summary turn.
+- Later main-agent requests receive the summary turn plus the latest 4 full turns by default.
+- The summarizer receives no tools.
+- The agent-readable tool catalog is generated from Tool Registry metadata and currently lists only `local_search(query: string)`.
+- Natural conversation can proceed without configured folders; local-document answers are guided by instructions that folder setup is required before `local_search` can return useful context.
+
+Validation:
+
+- `npm run typecheck` passed.
+- `npm test` passed with fake-client coverage for natural conversation routing, no-folder conversation, context retention, summarization, summary-plus-recent context, and no-tool summarizer calls.

@@ -48,6 +48,47 @@ describe("LocalMemoryStore", () => {
     store.close();
   });
 
+  it("stores conversation turns and summary by Slack conversation key", () => {
+    const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
+
+    store.appendConversationTurn({
+      slackUserId: "U1",
+      channelId: "D1",
+      userText: "first",
+      assistantReply: "reply",
+      source: "app_home_message"
+    });
+    store.appendConversationTurn({
+      slackUserId: "U2",
+      channelId: "D1",
+      userText: "other user",
+      assistantReply: "other reply",
+      source: "app_home_message"
+    });
+    store.upsertConversationSummary({
+      slackUserId: "U1",
+      channelId: "D1",
+      summary: "User wants a concise summary.",
+      source: "app_home_message"
+    });
+
+    expect(store.listConversationTurns("U1", "D1")).toMatchObject([
+      {
+        kind: "full",
+        userText: "first",
+        assistantReply: "reply"
+      },
+      {
+        kind: "summary",
+        userText: null,
+        assistantReply: "User wants a concise summary."
+      }
+    ]);
+    expect(store.listConversationTurns("U2", "D1")).toHaveLength(1);
+
+    store.close();
+  });
+
   it("resets local memory tables and reports deleted counts", () => {
     const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
 
@@ -59,13 +100,22 @@ describe("LocalMemoryStore", () => {
       inputSummary: "query length=6",
       status: "success"
     });
+    store.appendConversationTurn({
+      slackUserId: "U1",
+      channelId: "D1",
+      userText: "hello",
+      assistantReply: "hi",
+      source: "app_home_message"
+    });
 
     expect(store.resetAll()).toMatchObject({
       allowedFolders: 1,
+      conversations: 1,
       toolCalls: 1,
       providerConfig: 1
     });
     expect(store.listAllowedFolders()).toEqual([]);
+    expect(store.listConversationTurns("U1", "D1")).toEqual([]);
     expect(store.getProviderConfig("openai")).toBeUndefined();
 
     store.close();

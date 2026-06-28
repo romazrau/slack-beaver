@@ -37,12 +37,13 @@ npm run agent:secrets:set-openai
 
 - Slack Socket Mode Local Agent runtime.
 - `/agent find <query>` slash command for read-only local file search.
-- Slack App Home and Messages tab support for `find <query>` and `ask <question>`.
+- Slack App Home and Messages tab support for `find <query>`, `ask <question>`, and natural App DM conversation.
 - Allowlisted local folder search for Markdown, text, CSV, and JSON-style local files.
 - Denylist and max-file-size guards for local file access.
-- SQLite local memory for enabled folders, provider setup metadata, conversations, and tool-call summaries.
+- SQLite local memory for enabled folders, provider setup metadata, conversation turns, summaries, and tool-call summaries.
 - Local-only OpenAI token setup through CLI; token-like Slack messages are refused.
 - Guarded OpenAI-backed `ask <question>` flow that can only call the registered `local_search` tool.
+- Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
 - JSONL audit log for successful and failed searchable tool activity.
 - Synthetic local-search fixtures under `doc-test/` for manual validation.
 

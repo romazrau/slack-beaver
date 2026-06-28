@@ -39,13 +39,21 @@ export type AgentToolCallResult = {
   resultCount: number;
 };
 
+const REGISTERED_TOOL_METADATA = [
+  {
+    name: "local_search" as const,
+    description:
+      "Search read-only allowlisted local text files for a query. Does not accept paths or shell commands.",
+    catalogLine:
+      "local_search({ query: string }): Search read-only allowlisted local text files. Hard limits: no path input, no shell command, no token access, no file mutation, no denied folders, no non-registered fields."
+  }
+];
+
 export function listAgentToolDefinitions() {
-  return [
-    {
+  return REGISTERED_TOOL_METADATA.map((tool) => ({
       type: "function" as const,
-      name: "local_search",
-      description:
-        "Search read-only allowlisted local text files for a query. Does not accept paths or shell commands.",
+      name: tool.name,
+      description: tool.description,
       strict: true,
       parameters: {
         type: "object",
@@ -58,8 +66,11 @@ export function listAgentToolDefinitions() {
         },
         required: ["query"]
       }
-    }
-  ];
+    }));
+}
+
+export function buildAgentReadableToolCatalog(): string {
+  return REGISTERED_TOOL_METADATA.map((tool) => `- ${tool.catalogLine}`).join("\n");
 }
 
 export async function runAgentToolCall(
@@ -108,7 +119,18 @@ function parseLocalSearchInput(input: unknown): { ok: true; query: string } | { 
     return { ok: false, reason: "query must be a non-empty string" };
   }
 
-  return { ok: true, query: input.query.trim() };
+  const query = input.query.trim();
+  if (containsPathLikeInput(query)) {
+    return { ok: false, reason: "query must not contain filesystem paths" };
+  }
+
+  return { ok: true, query };
+}
+
+function containsPathLikeInput(value: string): boolean {
+  return /(^|\s)(~\/|[A-Za-z]:\\|\.\.\/|\/(?:Users|private|tmp|var|etc|home|opt|Volumes|Applications|Library)\b|\/\S+\/\S+)/.test(
+    value
+  );
 }
 
 function recordRejectedToolCall(

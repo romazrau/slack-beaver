@@ -23,7 +23,9 @@ describe("buildAppHomeView", () => {
       },
       ai: {
         openAiModel: "test-model",
-        maxToolTurns: 2
+        maxToolTurns: 2,
+        maxConversationFullTurns: 8,
+        conversationRecentTurnsAfterSummary: 4
       },
       auditLogPath: "./logs/audit.jsonl"
     };
@@ -59,7 +61,9 @@ describe("buildAppHomeView", () => {
       },
       ai: {
         openAiModel: "test-model",
-        maxToolTurns: 2
+        maxToolTurns: 2,
+        maxConversationFullTurns: 8,
+        conversationRecentTurnsAfterSummary: 4
       },
       auditLogPath: "./logs/audit.jsonl"
     };

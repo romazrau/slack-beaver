@@ -8,7 +8,7 @@ import {
 } from "../slack/onboardingCopy.js";
 import { formatErrorResponse, formatSearchResponse, parseAgentCommand } from "../slack/slackResponses.js";
 import { looksLikeAiToken } from "../setup/secretSetup.js";
-import { runAgentQuestion, type AgentModelClient } from "./agentRunner.js";
+import { runAgentConversation, runAgentQuestion, type AgentModelClient } from "./agentRunner.js";
 import { runLocalSearchTool } from "./toolRegistry.js";
 
 export type AgentCommandSource = "slash_command" | "app_home_message";
@@ -17,9 +17,11 @@ export type RunAgentTextCommandInput = {
   text: string;
   slackUserId: string;
   channelId: string;
+  threadTs?: string;
   source: AgentCommandSource;
   config: AppConfig;
   modelClient?: AgentModelClient;
+  summarizerClient?: AgentModelClient;
   logger?: {
     error: (message: string) => void;
   };
@@ -35,7 +37,8 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
   }
 
   const parsed = parseAgentCommand(input.text);
-  if (parsed.type === "invalid") {
+  const shouldRunNaturalConversation = parsed.type === "invalid" && input.source === "app_home_message";
+  if (parsed.type === "invalid" && !shouldRunNaturalConversation) {
     return formatInvalidCommandReason(parsed.reason, input.source);
   }
 
@@ -46,7 +49,7 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
   try {
     const memoryFolders = memoryStore?.listEnabledAllowedFolderPaths() ?? [];
     const watchedFolders = mergeUniquePaths(input.config.localFiles.watchedFolders, memoryFolders);
-    if (watchedFolders.length === 0) {
+    if (!shouldRunNaturalConversation && watchedFolders.length === 0) {
       return formatNoFoldersGuidance();
     }
 
@@ -57,6 +60,30 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
         watchedFolders
       }
     };
+
+    if (shouldRunNaturalConversation) {
+      const answer = await runAgentConversation({
+        message: input.text,
+        slackUserId: input.slackUserId,
+        channelId: input.channelId,
+        threadTs: input.threadTs,
+        source: input.source,
+        config,
+        memoryStore,
+        modelClient: input.modelClient,
+        summarizerClient: input.summarizerClient
+      });
+      await writeAuditLog(input.config.auditLogPath, {
+        timestamp: new Date().toISOString(),
+        slackUserId: input.slackUserId,
+        channelId: input.channelId,
+        query: input.text,
+        resultCount: answer.toolCallCount,
+        status: "success",
+        source: input.source
+      });
+      return answer.answer;
+    }
 
     if (parsed.type === "ask") {
       const answer = await runAgentQuestion({
@@ -76,6 +103,10 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
         source: input.source
       });
       return answer.answer;
+    }
+
+    if (parsed.type !== "find") {
+      return formatInvalidCommandReason(parsed.reason, input.source);
     }
 
     const results = await runLocalSearchTool(parsed.query, {
@@ -100,7 +131,7 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
       timestamp: new Date().toISOString(),
       slackUserId: input.slackUserId,
       channelId: input.channelId,
-      query: parsed.type === "ask" ? parsed.question : parsed.query,
+      query: parsed.type === "ask" ? parsed.question : parsed.type === "find" ? parsed.query : input.text,
       resultCount: 0,
       status: "error",
       source: input.source,

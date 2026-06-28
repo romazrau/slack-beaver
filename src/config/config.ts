@@ -20,6 +20,8 @@ export type AppConfig = {
   ai: {
     openAiModel: string;
     maxToolTurns: number;
+    maxConversationFullTurns: number;
+    conversationRecentTurnsAfterSummary: number;
   };
   auditLogPath: string;
 };
@@ -33,6 +35,8 @@ const DEFAULT_LOCAL_MEMORY_DB_PATH = "./data/slack-beaver.sqlite";
 const DEFAULT_OPENAI_TOKEN_PATH = "./tokens/openai.key";
 const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
 const DEFAULT_MAX_AGENT_TOOL_TURNS = 2;
+const DEFAULT_MAX_CONVERSATION_FULL_TURNS = 8;
+const DEFAULT_CONVERSATION_RECENT_TURNS_AFTER_SUMMARY = 4;
 
 export function loadConfig(env: Env = process.env): AppConfig {
   const socketModeEnabled = parseBoolean(env.SLACK_SOCKET_MODE_ENABLED, true);
@@ -53,6 +57,16 @@ export function loadConfig(env: Env = process.env): AppConfig {
     env.MAX_AGENT_TOOL_TURNS,
     DEFAULT_MAX_AGENT_TOOL_TURNS,
     "MAX_AGENT_TOOL_TURNS"
+  );
+  const maxConversationFullTurns = parsePositiveInteger(
+    env.MAX_CONVERSATION_FULL_TURNS,
+    DEFAULT_MAX_CONVERSATION_FULL_TURNS,
+    "MAX_CONVERSATION_FULL_TURNS"
+  );
+  const conversationRecentTurnsAfterSummary = parsePositiveInteger(
+    env.CONVERSATION_RECENT_TURNS_AFTER_SUMMARY,
+    DEFAULT_CONVERSATION_RECENT_TURNS_AFTER_SUMMARY,
+    "CONVERSATION_RECENT_TURNS_AFTER_SUMMARY"
   );
 
   const errors: string[] = [];
@@ -93,7 +107,9 @@ export function loadConfig(env: Env = process.env): AppConfig {
     },
     ai: {
       openAiModel: env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL,
-      maxToolTurns
+      maxToolTurns,
+      maxConversationFullTurns,
+      conversationRecentTurnsAfterSummary
     },
     auditLogPath: env.AUDIT_LOG_PATH ?? DEFAULT_AUDIT_LOG_PATH
   };

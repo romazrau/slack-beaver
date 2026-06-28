@@ -52,6 +52,7 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
       text: message.text,
       slackUserId: message.user,
       channelId: message.channel,
+      threadTs: message.thread_ts,
       source: "app_home_message",
       config,
       logger
@@ -92,6 +93,7 @@ type SlackMessage = {
   user?: string;
   channel?: string;
   text?: string;
+  thread_ts?: string;
 };
 
 export function isDirectUserMessage(message: unknown): message is Required<

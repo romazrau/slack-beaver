@@ -6,6 +6,12 @@ Add the next implementation phase for Slack Beaver agent conversation behavior. 
 
 This is a development specification. It does not change runtime behavior by itself.
 
+## Implementation Status
+
+Implemented on 2026-06-29.
+
+Runtime now supports App DM natural conversation when local OpenAI token setup is complete. The implementation stores full conversation turns and summary turns, summarizes overflow beyond 8 full turns, sends later requests one summary plus the latest 4 full turns by default, and exposes the agent-readable tool catalog from Tool Registry metadata. Slash commands remain explicit.
+
 ## Current State
 
 - `/agent find <query>` and App DM `find <query>` run deterministic local search.
