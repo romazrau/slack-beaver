@@ -16,6 +16,11 @@ describe("buildAppHomeView", () => {
         maxFileBytes: 1024,
         maxResults: 5
       },
+      localMemory: {
+        enabled: true,
+        dbPath: "./data/test.sqlite",
+        openAiTokenPath: "./tokens/openai.key"
+      },
       auditLogPath: "./logs/audit.jsonl"
     };
 
@@ -25,10 +30,36 @@ describe("buildAppHomeView", () => {
     expect(view.type).toBe("home");
     expect(serialized).toContain("Slack Beaver Local Agent");
     expect(serialized).toContain("find <query>");
-    expect(serialized).toContain("Watched folders");
+    expect(serialized).toContain("Allowed folders");
     expect(serialized).not.toContain("xoxb-secret");
     expect(serialized).not.toContain("xapp-secret");
     expect(serialized).not.toContain("/Users/example/Documents");
     expect(serialized).not.toContain("/Users/example/.ssh");
+  });
+
+  it("shows setup guidance when no allowed folders are known", () => {
+    const config: AppConfig = {
+      slack: {
+        socketModeEnabled: true
+      },
+      localFiles: {
+        watchedFolders: [],
+        denylistFolders: [],
+        maxFileBytes: 1024,
+        maxResults: 5
+      },
+      localMemory: {
+        enabled: true,
+        dbPath: "./data/test.sqlite",
+        openAiTokenPath: "./tokens/openai.key"
+      },
+      auditLogPath: "./logs/audit.jsonl"
+    };
+
+    const serialized = JSON.stringify(buildAppHomeView(config, { allowedFolderCount: 0 }));
+
+    expect(serialized).toContain("Setup needed");
+    expect(serialized).toContain("npm run agent:folders:add");
+    expect(serialized).toContain("OpenAI token");
   });
 });

@@ -6,7 +6,7 @@
 
 ## Decision
 
-The next major capability should add local memory and an OpenAI-backed agent, but implementation should wait until the plan and acceptance criteria are documented.
+The first local memory and OpenAI token safety slice is implemented. It adds SQLite memory, local folder setup CLI, local OpenAI token setup metadata, Slack token-like refusal, and a guarded local-search Tool Registry path.
 
 The defaults are:
 
@@ -23,13 +23,21 @@ The defaults are:
 - Local CLI token entry avoids sending paid secrets through Slack.
 - Keeping folder permission decisions in Local Agent code prevents the LLM from expanding its own access.
 
-## Planned Behavior
+## Implemented Behavior
 
-- If a user opens the app with no known folders, Slack should ask them to add allowed folders locally.
-- If known folders exist, requests use those folders by default when no path is mentioned.
-- Users can add paths later through a local setup flow.
-- Slack should refuse pasted AI tokens and direct users to local CLI setup.
-- The agent should route work through a Tool Registry, not arbitrary commands.
+- If a user opens the app with no known folders, App Home shows local folder setup guidance.
+- If no folders exist and the user runs `find <query>`, Slack asks them to add a folder locally.
+- If known folders exist, search requests use `.env` watched folders plus SQLite enabled allowed folders.
+- Users can add, list, and disable paths through local CLI scripts.
+- Slack refuses pasted AI-token-like strings and directs users to local CLI setup.
+- Local search now runs through a Tool Registry wrapper that records tool-call summaries in SQLite.
+
+## Deferred Behavior
+
+- Real OpenAI API calls.
+- LLM agent loop and tool choice.
+- Prompt-injection fixture UAT against LLM-generated tool calls.
+- Claude or opencode provider support.
 
 ## Safety Rules
 
@@ -42,5 +50,5 @@ The defaults are:
 ## Planned Documentation And Validation
 
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` defines the next phase scope and acceptance criteria.
-- README should describe the feature as planned, not implemented.
-- Future implementation must include tests for folder memory, token refusal, Tool Registry guardrails, and prompt-injection fixtures.
+- README describes the implemented local memory/token safety slice and calls out deferred OpenAI agent work.
+- Tests cover folder memory, folder validation, token refusal, local token storage permissions, App Home setup guidance, and existing search compatibility.

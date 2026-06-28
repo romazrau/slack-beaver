@@ -1,7 +1,15 @@
 import type { KnownBlock, View } from "@slack/bolt";
 import type { AppConfig } from "./config.js";
 
-export function buildAppHomeView(config: AppConfig): View {
+export type AppHomeState = {
+  allowedFolderCount?: number;
+  openAiTokenConfigured?: boolean;
+};
+
+export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): View {
+  const watchedFolderCount = state.allowedFolderCount ?? config.localFiles.watchedFolders.length;
+  const setupBlocks = watchedFolderCount === 0 ? buildSetupBlocks() : [];
+
   const blocks: KnownBlock[] = [
     {
       type: "header",
@@ -26,7 +34,7 @@ export function buildAppHomeView(config: AppConfig): View {
         },
         {
           type: "mrkdwn",
-          text: `*Watched folders*\n${config.localFiles.watchedFolders.length}`
+          text: `*Allowed folders*\n${watchedFolderCount}`
         },
         {
           type: "mrkdwn",
@@ -45,12 +53,26 @@ export function buildAppHomeView(config: AppConfig): View {
         text: "*Chat command*\nOpen the Messages tab and type `find <query>`."
       }
     },
+    ...setupBlocks,
+    {
+      type: "section",
+      fields: [
+        {
+          type: "mrkdwn",
+          text: `*OpenAI token*\n${state.openAiTokenConfigured ? "Configured locally" : "Not configured"}`
+        },
+        {
+          type: "mrkdwn",
+          text: "*Token setup*\nUse local CLI only"
+        }
+      ]
+    },
     {
       type: "context",
       elements: [
         {
           type: "mrkdwn",
-          text: "v1 is read-only and only searches allowlisted local folders. Secrets and token values are never shown here."
+          text: "v1 is read-only and only searches allowlisted local folders. Secrets and token values are never accepted or shown in Slack."
         }
       ]
     }
@@ -60,4 +82,16 @@ export function buildAppHomeView(config: AppConfig): View {
     type: "home",
     blocks
   };
+}
+
+function buildSetupBlocks(): KnownBlock[] {
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Setup needed*\nNo local folders are allowed yet. Run `npm run agent:folders:add -- /absolute/path/to/folder` on this computer."
+      }
+    }
+  ];
 }

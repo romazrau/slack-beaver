@@ -10,6 +10,7 @@ describe("loadConfig", () => {
       DENYLIST_FOLDERS: "/tmp/a/private",
       MAX_LOCAL_FILE_BYTES: "1234",
       MAX_SEARCH_RESULTS: "7",
+      LOCAL_MEMORY_ENABLED: "false",
       AUDIT_LOG_PATH: "./tmp/audit.jsonl"
     });
 
@@ -18,6 +19,7 @@ describe("loadConfig", () => {
     expect(config.localFiles.denylistFolders).toEqual([path.resolve("/tmp/a/private")]);
     expect(config.localFiles.maxFileBytes).toBe(1234);
     expect(config.localFiles.maxResults).toBe(7);
+    expect(config.localMemory.enabled).toBe(false);
     expect(config.auditLogPath).toBe("./tmp/audit.jsonl");
   });
 
@@ -32,8 +34,24 @@ describe("loadConfig", () => {
   it("requires at least one watched folder", () => {
     expect(() =>
       loadConfig({
-        SLACK_SOCKET_MODE_ENABLED: "false"
+        SLACK_SOCKET_MODE_ENABLED: "false",
+        LOCAL_MEMORY_ENABLED: "false"
       })
     ).toThrow(/WATCHED_FOLDERS/);
+  });
+
+  it("allows empty watched folders when local memory is enabled", () => {
+    const config = loadConfig({
+      SLACK_SOCKET_MODE_ENABLED: "false",
+      LOCAL_MEMORY_DB_PATH: "./tmp/memory.sqlite",
+      OPENAI_TOKEN_PATH: "./tokens/openai.key"
+    });
+
+    expect(config.localFiles.watchedFolders).toEqual([]);
+    expect(config.localMemory).toEqual({
+      enabled: true,
+      dbPath: "./tmp/memory.sqlite",
+      openAiTokenPath: "./tokens/openai.key"
+    });
   });
 });

@@ -12,6 +12,11 @@ export type AppConfig = {
     maxFileBytes: number;
     maxResults: number;
   };
+  localMemory: {
+    enabled: boolean;
+    dbPath: string;
+    openAiTokenPath: string;
+  };
   auditLogPath: string;
 };
 
@@ -20,11 +25,14 @@ type Env = Record<string, string | undefined>;
 const DEFAULT_MAX_FILE_BYTES = 1_048_576;
 const DEFAULT_MAX_RESULTS = 5;
 const DEFAULT_AUDIT_LOG_PATH = "./logs/audit.jsonl";
+const DEFAULT_LOCAL_MEMORY_DB_PATH = "./data/slack-beaver.sqlite";
+const DEFAULT_OPENAI_TOKEN_PATH = "./tokens/openai.key";
 
 export function loadConfig(env: Env = process.env): AppConfig {
   const socketModeEnabled = parseBoolean(env.SLACK_SOCKET_MODE_ENABLED, true);
   const watchedFolders = parsePathList(env.WATCHED_FOLDERS);
   const denylistFolders = parsePathList(env.DENYLIST_FOLDERS);
+  const localMemoryEnabled = parseBoolean(env.LOCAL_MEMORY_ENABLED, true);
   const maxFileBytes = parsePositiveInteger(
     env.MAX_LOCAL_FILE_BYTES,
     DEFAULT_MAX_FILE_BYTES,
@@ -47,7 +55,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
     }
   }
 
-  if (watchedFolders.length === 0) {
+  if (!localMemoryEnabled && watchedFolders.length === 0) {
     errors.push("WATCHED_FOLDERS must include at least one absolute folder path.");
   }
 
@@ -66,6 +74,11 @@ export function loadConfig(env: Env = process.env): AppConfig {
       denylistFolders,
       maxFileBytes,
       maxResults
+    },
+    localMemory: {
+      enabled: localMemoryEnabled,
+      dbPath: env.LOCAL_MEMORY_DB_PATH ?? DEFAULT_LOCAL_MEMORY_DB_PATH,
+      openAiTokenPath: env.OPENAI_TOKEN_PATH ?? DEFAULT_OPENAI_TOKEN_PATH
     },
     auditLogPath: env.AUDIT_LOG_PATH ?? DEFAULT_AUDIT_LOG_PATH
   };

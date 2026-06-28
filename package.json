@@ -5,6 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
+    "agent:folders:add": "tsx src/localCli.ts folders:add",
+    "agent:folders:list": "tsx src/localCli.ts folders:list",
+    "agent:folders:remove": "tsx src/localCli.ts folders:remove",
+    "agent:secrets:set-openai": "tsx src/localCli.ts secrets:set-openai",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "build": "npm run clean && tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
@@ -12,9 +16,11 @@
   },
   "dependencies": {
     "@slack/bolt": "^3.21.2",
+    "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.7"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",

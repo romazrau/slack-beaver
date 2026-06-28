@@ -26,6 +26,11 @@ function buildConfig(): AppConfig {
       maxFileBytes: 1024,
       maxResults: 5
     },
+    localMemory: {
+      enabled: false,
+      dbPath: path.join(tempDir, "memory.sqlite"),
+      openAiTokenPath: path.join(tempDir, "tokens", "openai.key")
+    },
     auditLogPath: path.join(tempDir, "logs", "audit.jsonl")
   };
 }
@@ -85,6 +90,39 @@ describe("runAgentTextCommand", () => {
     });
 
     expect(response).toBe("Usage: /agent find <query>");
+    await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
+  });
+
+  it("asks for local folder setup when no folders are known", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+
+    const response = await runAgentTextCommand({
+      text: "find Socket",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(response).toContain("No local folders are allowed yet");
+    expect(response).toContain("npm run agent:folders:add");
+    await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
+  });
+
+  it("refuses token-like Slack messages without writing them to audit", async () => {
+    const config = buildConfig();
+    const fakeToken = `sk-${"1".repeat(30)}`;
+    const response = await runAgentTextCommand({
+      text: fakeToken,
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(response).toContain("cannot accept API keys");
     await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
   });
 });

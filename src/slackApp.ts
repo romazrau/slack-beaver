@@ -3,6 +3,7 @@ import type { App as SlackBoltApp } from "@slack/bolt";
 import { runAgentTextCommand } from "./agentCommands.js";
 import { buildAppHomeView } from "./appHomeView.js";
 import type { AppConfig } from "./config.js";
+import { LocalMemoryStore, mergeUniquePaths } from "./localMemory.js";
 
 export function createSlackApp(config: AppConfig): SlackBoltApp {
   if (!config.slack.botToken || !config.slack.appToken) {
@@ -31,9 +32,10 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
 
   app.event("app_home_opened", async ({ event, client, logger }) => {
     try {
+      const state = loadAppHomeState(config);
       await client.views.publish({
         user_id: event.user,
-        view: buildAppHomeView(config)
+        view: buildAppHomeView(config, state)
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -58,6 +60,29 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
   });
 
   return app;
+}
+
+function loadAppHomeState(config: AppConfig) {
+  if (!config.localMemory.enabled) {
+    return {
+      allowedFolderCount: config.localFiles.watchedFolders.length,
+      openAiTokenConfigured: false
+    };
+  }
+
+  const store = new LocalMemoryStore(config.localMemory.dbPath);
+  try {
+    const folders = mergeUniquePaths(
+      config.localFiles.watchedFolders,
+      store.listEnabledAllowedFolderPaths()
+    );
+    return {
+      allowedFolderCount: folders.length,
+      openAiTokenConfigured: store.getProviderConfig("openai")?.tokenConfigured ?? false
+    };
+  } finally {
+    store.close();
+  }
 }
 
 type SlackMessage = {

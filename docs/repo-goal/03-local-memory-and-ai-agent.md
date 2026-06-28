@@ -2,7 +2,7 @@
 
 ## Context
 
-Slack Beaver currently supports Slack App Home chat and `/agent find <query>` by reading `WATCHED_FOLDERS` from local configuration. The next phase should add memory and AI planning boundaries, but this planning phase does not implement runtime behavior.
+Slack Beaver supports Slack App Home chat and `/agent find <query>` by reading allowlisted local folders. This phase adds the first local memory and AI token safety slice: SQLite folder memory, local setup CLI, token-like Slack refusal, and a guarded Tool Registry path for local search.
 
 The new product direction is:
 
@@ -29,7 +29,7 @@ Slack remains the UI and control surface. The Local Agent remains the only proce
 
 ## Non-Goals
 
-- Do not implement this phase yet.
+- Do not add real OpenAI API calls yet.
 - Do not accept AI tokens through Slack messages.
 - Do not add Claude, opencode, or multi-provider routing in the first implementation.
 - Do not add arbitrary shell command execution.
@@ -46,7 +46,7 @@ Slack remains the UI and control surface. The Local Agent remains the only proce
 - Keep all folder access decisions in deterministic application code.
 - Treat Slack messages, local file content, and LLM output as untrusted input.
 
-## Planned User Experience
+## User Experience
 
 When the user opens `Slack Beaver Local Agent` in Slack:
 
@@ -60,7 +60,7 @@ When the user sends a search or agent request:
 - If a folder path is mentioned, the agent only uses it when it is already allowed or after a local add-folder flow validates and stores it.
 - If a requested path is outside allowed folders, the agent refuses and explains that local folder permission must be added first.
 
-Planned local CLI examples:
+Local CLI:
 
 ```sh
 npm run agent:folders:add -- /absolute/path/to/folder
@@ -69,7 +69,7 @@ npm run agent:folders:remove -- /absolute/path/to/folder
 npm run agent:secrets:set-openai
 ```
 
-The actual command names may change during implementation, but the security rule should not: paid AI tokens must be entered locally and must not be sent through Slack.
+Paid AI tokens must be entered locally and must not be sent through Slack.
 
 ## Local Memory Model
 
@@ -81,7 +81,7 @@ SQLite should store at least these concepts:
 - `tool_calls`: tool name, source, input summary, output summary, status, error summary, timestamps, and audit correlation.
 - `provider_config`: provider name and metadata showing whether a token is configured, without storing the token value in ordinary tables.
 
-Secret storage should be decided during implementation. Acceptable options are a local secret store or a file with strict permissions; in either case, token values must not appear in audit logs, prompts, README examples, or memory docs.
+The first implementation stores the OpenAI token in `OPENAI_TOKEN_PATH`, defaulting to `./tokens/openai.key`, with `0600` file permissions. The SQLite `provider_config` table only records whether the token is configured, not the token value.
 
 ## Tool And Agent Safety
 
@@ -105,7 +105,7 @@ Prompt-injection policy:
 - Retrieved document text should be quoted or delimited in prompts as untrusted context.
 - If document content asks the agent to ignore policy, reveal tokens, or read other folders, the agent must ignore that instruction.
 
-## Acceptance Criteria For Future Implementation
+## Acceptance Criteria
 
 - With no stored allowed folders, App Home shows setup guidance and chat requests ask the user to add a local folder through CLI.
 - After adding an allowed folder locally, App Home shows a count of known folders without exposing full paths by default.
@@ -117,7 +117,7 @@ Prompt-injection policy:
 - Prompt-injection fixture content cannot cause reads outside allowed folders, denylist bypass, token disclosure, shell execution, or file modification.
 - Existing `/agent find <query>` and App Home `find <query>` behavior remains compatible.
 
-## Verification Plan For Future Implementation
+## Verification Plan
 
 Automated tests should cover:
 
@@ -140,11 +140,47 @@ Manual UAT should cover:
 - Try to paste a fake OpenAI token in Slack and confirm the bot refuses to accept it.
 - Configure OpenAI locally, ask an agent-style question, and confirm only registered tools are used.
 
+## Execution Results
+
+Execution date: 2026-06-28
+
+Completed:
+
+- Added `better-sqlite3` local memory storage.
+- Added SQLite schema for `allowed_folders`, `settings`, `conversations`, `tool_calls`, and `provider_config`.
+- Added `LOCAL_MEMORY_ENABLED`, `LOCAL_MEMORY_DB_PATH`, and `OPENAI_TOKEN_PATH`.
+- `WATCHED_FOLDERS` can be empty when local memory is enabled.
+- Added local CLI scripts:
+  - `npm run agent:folders:add -- /absolute/path/to/folder`
+  - `npm run agent:folders:list`
+  - `npm run agent:folders:remove -- /absolute/path/to/folder`
+  - `npm run agent:secrets:set-openai`
+- Added folder validation for absolute path, realpath, directory type, OS read permission, and denylist checks.
+- Added local OpenAI token storage with `0600` permissions and provider metadata in SQLite.
+- Added Slack token-like message refusal before command parsing or audit logging.
+- Added App Home setup guidance when no allowed folders are known.
+- Added Tool Registry `local_search` execution path with tool-call summaries in SQLite.
+- Kept existing slash command and App Home `find <query>` behavior compatible.
+
+Deferred:
+
+- Real OpenAI API calls.
+- LLM tool-choice loop.
+- Multi-provider routing.
+- Prompt-injection fixture corpus and live Slack UAT for AI agent behavior.
+
+Verification:
+
+- `npm test` passed.
+- `npm run typecheck` passed.
+- `git diff --check` passed.
+- Token-like secret scan against `README.md`, `docs`, `.env.example`, and source/tests was run before commit.
+
 ## Documentation Definition Of Done
 
-- README states this is a planned next phase, not a completed feature.
+- README states which Local Memory/token safety behavior is implemented and which OpenAI agent behavior remains deferred.
 - Memory docs record SQLite, OpenAI-only, and local CLI token setup decisions.
 - No real token values appear in tracked files.
 - `git diff --check` passes.
 - `npm test` passes.
-- Changes are committed with a docs-only commit.
+- Changes are committed with implementation, tests, and documentation together.
