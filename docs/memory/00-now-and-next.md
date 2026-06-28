@@ -26,7 +26,10 @@
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
 - Source code now includes a guarded OpenAI-backed `ask <question>` runner that can only use validated Tool Registry `local_search` calls.
 - Source code now includes App DM natural conversation, persisted conversation turns, overflow summarization, summary-plus-recent context retention, and a Tool Registry-backed agent-readable tool catalog.
+- Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
+- Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
+- Local development and runtime commands now standardize on Node.js 22 through `.nvmrc`, `.node-version`, and `package.json` engines to keep `better-sqlite3` native bindings ABI-compatible.
 
 ## Validation Status
 
@@ -46,6 +49,8 @@
 - Project cleanup typecheck passed after moving modules into responsibility-based folders. `npm run verify` is now the preferred local gate before future commits.
 - OpenAI agent runner automated validation covers fake-client `local_search`, unknown tool rejection, malformed input rejection, token-file permission checks, and existing `find` compatibility. Live Slack/OpenAI UAT remains pending.
 - App DM conversation context validation covers natural conversation routing, no-folder conversation, persisted turns, context separation, 8-turn retention defaults, overflow summarization, summary-plus-recent context, no-tool summarizer calls, and Tool Registry catalog metadata. Live Slack/OpenAI UAT remains pending.
+- VS Code terminal running Node.js `v22.23.1` successfully rebuilt `better-sqlite3` after a Node 20/22 native ABI mismatch; Node 22 smoke testing loaded `better-sqlite3` with `NODE_MODULE_VERSION 127`, and `npm run verify` passed.
+- Agent token onboarding validation passed with focused App Home / command / local CLI / Node preflight tests, Node 24 failure-path smoke testing, Node 22 temporary-path CLI smoke testing for `npm run agent:secrets:set-openai`, Chrome live App Home and Messages verification, and the full `npm run verify` gate under Node.js `v22.23.1`.
 
 ## Likely Next Work
 

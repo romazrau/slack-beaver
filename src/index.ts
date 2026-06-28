@@ -1,5 +1,7 @@
 import "dotenv/config";
 import { loadConfig } from "./config/config.js";
+import { LocalMemoryStore } from "./memory/localMemory.js";
+import { formatMissingAiAgentTokenStartupGuidance } from "./setup/startupGuidance.js";
 import { createSlackApp } from "./slack/slackApp.js";
 
 async function main(): Promise<void> {
@@ -13,6 +15,22 @@ async function main(): Promise<void> {
   const app = createSlackApp(config);
   await app.start();
   console.log("Slack Beaver Local Agent is running with Slack Socket Mode.");
+  if (!isAiAgentTokenConfigured(config)) {
+    console.warn(formatMissingAiAgentTokenStartupGuidance());
+  }
+}
+
+function isAiAgentTokenConfigured(config: ReturnType<typeof loadConfig>): boolean {
+  if (!config.localMemory.enabled) {
+    return false;
+  }
+
+  const store = new LocalMemoryStore(config.localMemory.dbPath);
+  try {
+    return store.getProviderConfig("openai")?.tokenConfigured ?? false;
+  } finally {
+    store.close();
+  }
 }
 
 main().catch((error: unknown) => {

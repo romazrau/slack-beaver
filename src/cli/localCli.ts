@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { stdin as input, stdout as output } from "node:process";
 import { pathToFileURL } from "node:url";
 import { loadConfig } from "../config/config.js";
@@ -13,7 +14,7 @@ type CliResult = {
 
 export async function runLocalCli(argv: string[] = process.argv.slice(2)): Promise<CliResult> {
   const [command, ...rest] = argv;
-  const config = loadConfig(process.env);
+  const config = loadConfig(process.env, { requireSlackTokens: false });
   const store = new LocalMemoryStore(config.localMemory.dbPath);
 
   try {

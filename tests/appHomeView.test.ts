@@ -37,6 +37,8 @@ describe("buildAppHomeView", () => {
     expect(serialized).toContain("Slack Beaver Local Agent");
     expect(serialized).toContain("find <query>");
     expect(serialized).toContain("Allowed folders");
+    expect(serialized).toContain("Enable AI answers");
+    expect(serialized).toContain("npm run agent:secrets:set-openai");
     expect(serialized).not.toContain("xoxb-secret");
     expect(serialized).not.toContain("xapp-secret");
     expect(serialized).not.toContain("/Users/example/Documents");
@@ -75,6 +77,44 @@ describe("buildAppHomeView", () => {
     expect(serialized).toContain("npm run agent:folders:list");
     expect(serialized).toContain("npm run agent:secrets:set-openai");
     expect(serialized).toContain("ask <question>");
-    expect(serialized).toContain("OpenAI token");
+    expect(serialized).toContain("AI agent token");
+  });
+
+  it("shows ready state without setup command when the AI agent token is configured", () => {
+    const config: AppConfig = {
+      slack: {
+        socketModeEnabled: true
+      },
+      localFiles: {
+        watchedFolders: ["/Users/example/Documents"],
+        denylistFolders: [],
+        maxFileBytes: 1024,
+        maxResults: 5
+      },
+      localMemory: {
+        enabled: true,
+        dbPath: "./data/test.sqlite",
+        openAiTokenPath: "./tokens/openai.key"
+      },
+      ai: {
+        openAiModel: "test-model",
+        maxToolTurns: 2,
+        maxConversationFullTurns: 8,
+        conversationRecentTurnsAfterSummary: 4
+      },
+      auditLogPath: "./logs/audit.jsonl"
+    };
+
+    const serialized = JSON.stringify(
+      buildAppHomeView(config, {
+        allowedFolderCount: 1,
+        openAiTokenConfigured: true
+      })
+    );
+
+    expect(serialized).toContain("AI agent token");
+    expect(serialized).toContain("Configured locally");
+    expect(serialized).toContain("Ready for `ask <question>`");
+    expect(serialized).not.toContain("Enable AI answers");
   });
 });

@@ -28,6 +28,10 @@ export type AppConfig = {
 
 type Env = Record<string, string | undefined>;
 
+type LoadConfigOptions = {
+  requireSlackTokens?: boolean;
+};
+
 const DEFAULT_MAX_FILE_BYTES = 1_048_576;
 const DEFAULT_MAX_RESULTS = 5;
 const DEFAULT_AUDIT_LOG_PATH = "./logs/audit.jsonl";
@@ -38,7 +42,8 @@ const DEFAULT_MAX_AGENT_TOOL_TURNS = 2;
 const DEFAULT_MAX_CONVERSATION_FULL_TURNS = 8;
 const DEFAULT_CONVERSATION_RECENT_TURNS_AFTER_SUMMARY = 4;
 
-export function loadConfig(env: Env = process.env): AppConfig {
+export function loadConfig(env: Env = process.env, options: LoadConfigOptions = {}): AppConfig {
+  const requireSlackTokens = options.requireSlackTokens ?? true;
   const socketModeEnabled = parseBoolean(env.SLACK_SOCKET_MODE_ENABLED, true);
   const watchedFolders = parsePathList(env.WATCHED_FOLDERS);
   const denylistFolders = parsePathList(env.DENYLIST_FOLDERS);
@@ -71,7 +76,7 @@ export function loadConfig(env: Env = process.env): AppConfig {
 
   const errors: string[] = [];
 
-  if (socketModeEnabled) {
+  if (requireSlackTokens && socketModeEnabled) {
     if (!env.SLACK_BOT_TOKEN) {
       errors.push("SLACK_BOT_TOKEN is required when SLACK_SOCKET_MODE_ENABLED is true.");
     }

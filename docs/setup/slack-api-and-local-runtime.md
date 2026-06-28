@@ -69,7 +69,7 @@ DENYLIST_FOLDERS=/Users/example/.ssh,/Users/example/Library
 MAX_LOCAL_FILE_BYTES=1048576
 MAX_SEARCH_RESULTS=5
 
-# Local memory and OpenAI setup
+# Local memory and AI agent token setup
 LOCAL_MEMORY_ENABLED=true
 LOCAL_MEMORY_DB_PATH=./data/slack-beaver.sqlite
 OPENAI_TOKEN_PATH=./tokens/openai.key
@@ -95,10 +95,25 @@ AUDIT_LOG_PATH=./logs/audit.jsonl
 
 ## Local Agent Commands
 
+Use Node.js 22 for install, verification, and runtime commands. The repository includes `.nvmrc` and `.node-version` for local version managers.
+
+```sh
+nvm use
+node -v
+```
+
+Project npm scripts check the active Node major version before loading native SQLite bindings. If the terminal is on Node 20 or Node 24, the command exits with `nvm use` guidance before `better-sqlite3` can throw an ABI error.
+
 Install dependencies:
 
 ```sh
 npm install
+```
+
+`better-sqlite3` ships a native binding compiled for the active Node ABI. If dependencies were installed under a different Node major version, rebuild it before starting the Local Agent:
+
+```sh
+npm rebuild better-sqlite3
 ```
 
 Start in foreground:
@@ -111,6 +126,12 @@ Expected startup output:
 
 ```text
 Slack Beaver Local Agent is running with Slack Socket Mode.
+```
+
+If the AI agent token is missing, startup also prints the local setup command:
+
+```text
+npm run agent:secrets:set-openai
 ```
 
 Run verification:
@@ -127,11 +148,15 @@ npm run agent:folders:list
 npm run agent:folders:remove -- /absolute/path/to/folder
 ```
 
-OpenAI token setup:
+AI agent token setup:
 
 ```sh
 npm run agent:secrets:set-openai
 ```
+
+This command prompts locally for the OpenAI API key, saves it to `OPENAI_TOKEN_PATH`, and records provider setup metadata in SQLite. Do not paste API keys or paid tokens into Slack; Slack only shows setup guidance.
+
+The local setup command does not require Slack bot or app tokens. Full Slack tokens are still required when starting the Socket Mode Local Agent.
 
 Reset local memory with double confirmation:
 
@@ -156,7 +181,7 @@ find Socket
 ask What does the deployment checklist say?
 ```
 
-If no folder is configured, Slack responses should guide the user to run local folder setup commands. If no OpenAI token is configured, `ask <question>` should guide the user to run the local token setup command.
+If no folder is configured, Slack responses should guide the user to run local folder setup commands. If no AI agent token is configured, `ask <question>` should guide the user to run the local token setup command.
 
 ## Optional launchctl Demo
 

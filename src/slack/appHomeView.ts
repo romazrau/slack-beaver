@@ -1,6 +1,6 @@
 import type { KnownBlock, View } from "@slack/bolt";
 import type { AppConfig } from "../config/config.js";
-import { formatSetupChecklist } from "./onboardingCopy.js";
+import { formatAgentTokenSetupSteps, formatSetupChecklist } from "./onboardingCopy.js";
 
 export type AppHomeState = {
   allowedFolderCount?: number;
@@ -55,25 +55,13 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
       }
     },
     ...setupBlocks,
-    {
-      type: "section",
-      fields: [
-        {
-          type: "mrkdwn",
-          text: `*OpenAI token*\n${state.openAiTokenConfigured ? "Configured locally" : "Not configured"}`
-        },
-        {
-          type: "mrkdwn",
-          text: "*Token setup*\nLocal CLI only"
-        }
-      ]
-    },
+    ...buildAgentTokenBlocks(state.openAiTokenConfigured ?? false),
     {
       type: "context",
       elements: [
         {
           type: "mrkdwn",
-          text: "Secrets and token values are never accepted in Slack. Configure folders and OpenAI locally before using AI answers."
+          text: "Secrets and token values are never accepted in Slack. Configure folders and the AI agent token locally before using AI answers."
         }
       ]
     }
@@ -92,6 +80,49 @@ function buildSetupBlocks(): KnownBlock[] {
       text: {
         type: "mrkdwn",
         text: `*Setup needed*\n${formatSetupChecklist()}`
+      }
+    }
+  ];
+}
+
+function buildAgentTokenBlocks(openAiTokenConfigured: boolean): KnownBlock[] {
+  if (openAiTokenConfigured) {
+    return [
+      {
+        type: "section",
+        fields: [
+          {
+            type: "mrkdwn",
+            text: "*AI agent token*\nConfigured locally"
+          },
+          {
+            type: "mrkdwn",
+            text: "*AI answers*\nReady for `ask <question>`"
+          }
+        ]
+      }
+    ];
+  }
+
+  return [
+    {
+      type: "section",
+      fields: [
+        {
+          type: "mrkdwn",
+          text: "*AI agent token*\nNot configured"
+        },
+        {
+          type: "mrkdwn",
+          text: "*AI answers*\nSetup required"
+        }
+      ]
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Enable AI answers*\n${formatAgentTokenSetupSteps()}`
       }
     }
   ];

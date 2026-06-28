@@ -37,6 +37,22 @@ describe("loadConfig", () => {
     ).toThrow(/SLACK_BOT_TOKEN.*SLACK_APP_TOKEN/s);
   });
 
+  it("allows local setup CLI config without Slack tokens", () => {
+    const config = loadConfig(
+      {
+        SLACK_SOCKET_MODE_ENABLED: "true",
+        LOCAL_MEMORY_DB_PATH: "./tmp/memory.sqlite",
+        OPENAI_TOKEN_PATH: "./tokens/openai.key"
+      },
+      { requireSlackTokens: false }
+    );
+
+    expect(config.slack.socketModeEnabled).toBe(true);
+    expect(config.slack.botToken).toBeUndefined();
+    expect(config.slack.appToken).toBeUndefined();
+    expect(config.localMemory.openAiTokenPath).toBe("./tokens/openai.key");
+  });
+
   it("requires at least one watched folder", () => {
     expect(() =>
       loadConfig({

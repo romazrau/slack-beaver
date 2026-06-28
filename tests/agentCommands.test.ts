@@ -83,8 +83,9 @@ describe("runAgentTextCommand", () => {
       config
     });
 
-    expect(response).toContain("OpenAI token is not configured locally");
+    expect(response).toContain("AI agent token is not configured locally");
     expect(response).toContain("npm run agent:secrets:set-openai");
+    expect(response).toContain("Open a terminal in this project");
   });
 
   it("keeps slash command usage for invalid slash commands", async () => {
@@ -136,8 +137,9 @@ describe("runAgentTextCommand", () => {
       config
     });
 
-    expect(response).toContain("OpenAI token is not configured locally");
+    expect(response).toContain("AI agent token is not configured locally");
     expect(response).toContain("npm run agent:secrets:set-openai");
+    expect(response).toContain("Do not paste API keys");
   });
 
   it("returns OpenAI setup guidance for ask when token file is missing", async () => {
@@ -156,7 +158,7 @@ describe("runAgentTextCommand", () => {
       config
     });
 
-    expect(response).toContain("OpenAI token is not configured locally");
+    expect(response).toContain("AI agent token is not configured locally");
     expect(response).toContain("npm run agent:secrets:set-openai");
   });
 
@@ -512,6 +514,7 @@ describe("runAgentTextCommand", () => {
 
     expect(response).toContain("cannot accept API keys");
     expect(response).toContain("npm run agent:secrets:set-openai");
+    expect(response).toContain("Paste the OpenAI API key only when the local prompt asks");
     expect(response).toContain("ask <question>");
     await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
   });

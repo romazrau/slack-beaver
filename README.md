@@ -4,10 +4,25 @@ Slack Beaver is a local-first Slack agent. Slack is the control surface, and the
 
 ## Start The Server
 
+Use Node.js 22 before installing dependencies. The project uses native SQLite bindings through `better-sqlite3`, so `node_modules` must be installed or rebuilt with the same Node major version used to run the Local Agent.
+
+```sh
+nvm use
+node -v
+```
+
+Project npm scripts check this before loading native SQLite bindings. If a terminal has drifted to another Node major version, run `nvm use` before retrying the command.
+
 Install dependencies:
 
 ```sh
 npm install
+```
+
+If Node was changed after dependencies were installed, rebuild the native SQLite binding before starting:
+
+```sh
+npm rebuild better-sqlite3
 ```
 
 Create a local `.env` with Slack Socket Mode tokens and local runtime settings. Do not commit token values. See [Slack API And Local Runtime Setup](docs/setup/slack-api-and-local-runtime.md) for the required Slack app settings and environment variables.
@@ -16,6 +31,24 @@ Start the Local Agent:
 
 ```sh
 npm run dev
+```
+
+## Enable AI Answers
+
+`find <query>` works with allowed local folders. `ask <question>` and natural App DM conversation also need an AI agent token configured locally.
+
+The AI agent token is an OpenAI API key stored on this computer. Never paste API keys or paid tokens into Slack.
+
+```sh
+npm run agent:secrets:set-openai
+```
+
+This local setup command can run before Slack tokens are configured.
+
+After the local prompt saves the token and the Local Agent is running, return to the Slack app Messages tab and type:
+
+```text
+ask What does the deployment checklist say?
 ```
 
 Run the main verification gate:
@@ -57,5 +90,6 @@ npm run agent:secrets:set-openai
 - [Local Memory And AI Agent](docs/repo-goal/03-local-memory-and-ai-agent.md): local memory, token safety, and tool guardrails.
 - [OpenAI Agent Runner](docs/repo-goal/04-openai-agent-runner.md): guarded `ask <question>` implementation plan.
 - [Agent Conversation Context And Tool Catalog](docs/repo-goal/05-agent-conversation-context-and-tools.md): planned App DM natural conversation, tool catalog, and context summarization behavior.
+- [Agent Token Onboarding](docs/repo-goal/06-agent-token-onboarding.md): user-facing local-only AI agent token setup guidance.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.

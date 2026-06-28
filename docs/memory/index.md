@@ -6,9 +6,11 @@ This directory records project decisions, implementation notes, progress, and ne
 
 - `00-now-and-next.md`: Current project state, validation status, and active next phase.
 - `agent-conversation-context-and-tools.md`: Implemented App DM natural conversation, agent-readable tool catalog, and 8-turn context summarization policy.
+- `agent-token-onboarding.md`: Improved README, Slack App Home, and chat guidance for local-only AI agent token setup.
 - `accelerated-local-file-search.md`: Decision to prioritize a local Slack bot file search slice and require a user-run Local Agent process under tighter time constraints.
 - `doc-test-fixtures.md`: Synthetic local-search fixture corpus for poetry, literature, markets, news-style briefs, conversations, and task lists.
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.
+- `node-runtime-and-native-sqlite.md`: Node.js 22 runtime standardization and `better-sqlite3` native ABI rebuild guidance.
 - `openai-agent-runner.md`: Guarded OpenAI-backed `ask <question>` runner, strict local-search tool calling, token-file loading, and fake-client tests.
 - `project-structure-cleanup.md`: Source layout cleanup by responsibility and the standard `npm run verify` gate.
 - `readme-documentation-scope.md`: Decision to keep README limited to server startup, current features, and docs links while moving setup details into `docs/setup/`.
