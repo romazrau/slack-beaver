@@ -56,3 +56,16 @@ The defaults are:
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` defines the next phase scope and acceptance criteria.
 - README describes the implemented local memory/token safety slice and calls out deferred OpenAI agent work.
 - Tests cover folder memory, reset double confirmation, folder validation, token refusal, local token storage permissions, App Home setup guidance, and existing search compatibility.
+
+## Live UAT
+
+Verified on 2026-06-28 with Chrome against the real `For Coding` Slack app:
+
+- Local Agent was started with an empty live verification memory DB and empty `WATCHED_FOLDERS`.
+- App Home showed `Allowed folders` as `0`, `Setup needed`, the folder add CLI, `OpenAI token` as `Not configured`, and `Use local CLI only`.
+- App Messages `find Socket` returned clear setup guidance instead of silently failing.
+- App Messages `reset memory` returned local-only reset guidance, the exact double-confirmation command, the deletion scope, and the note that token files are not deleted.
+- App Messages with a fake token-like string returned `I cannot accept API keys or paid tokens in Slack` and the local OpenAI setup CLI.
+- The token-like refusal did not write a search audit entry.
+
+Computer Use plugin instructions were read for this verification request, but no direct Computer Use UI MCP was exposed in the callable tool list. Chrome plugin completed the practical Slack UI verification.
