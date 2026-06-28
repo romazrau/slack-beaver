@@ -2,7 +2,26 @@
 
 Slack Forge 是一個 Slack-based Local AI Ops Agent POC。專案目標是在三天內驗證一條可用的工作流：使用者透過 Slack 與本機啟動的 Local Agent 互動，查詢本機文件與 Google Workspace 文件、產生摘要、建立個人任務，並留下可追蹤的 audit log。
 
-目前 repo 仍在初始化階段，尚未建立 Node.js package manifest、source code 或測試框架。本 README 先記錄 POC 目標、預期技術棧、設定方向與開發驗證方式，後續實作時應隨功能同步更新。
+目前 repo 已建立 Slack Local File Search v0 的 Node.js/TypeScript 骨架。v0 聚焦最短可驗證路徑：使用者在自己的電腦啟動 Local Agent，Slack 透過 Socket Mode 將 `/agent find <query>` 事件送到 Local Agent，Local Agent 只搜尋 allowlist watched folders 內的本機文字檔，再把結果回覆 Slack 並寫入 JSONL audit log。
+
+## Local Agent Runtime 決策
+
+Slack bot 本身不能直接操作使用者電腦上的 OS folder。Slack 在本專案中只是 control surface；真正讀取本機資料夾的是使用者電腦上執行的 Local Agent process。
+
+v0 採用下列架構：
+
+```text
+Slack User
+  -> Slack Workspace
+  -> Slack Socket Mode WebSocket
+  -> Local Agent running on user's computer
+  -> allowlisted local folders
+  -> Slack response
+```
+
+第一版決策是 `Local Agent = Slack bot backend + local file reader`。因此不需要 cloud-hosted Slack backend、不需要 local companion app registration/pairing，也不需要 desktop app packaging。使用者必須在本機啟動 agent；如果 agent offline，Slack 就無法查找該電腦上的 local files。
+
+macOS 使用時需注意：Local Agent 只能讀取執行它的 OS account 有權限讀取的資料夾。若 watched folder 位於 Desktop、Documents、Downloads 或外接磁碟等受保護位置，可能需要在 macOS Privacy & Security 設定中允許 Terminal 或未來封裝後的 app 存取。
 
 ## POC 目標
 
@@ -66,58 +85,70 @@ Local Agent
 
 ## 未來環境變數範例
 
-目前尚未建立 `.env.example`。實作 Node.js 專案骨架時，應以 `.env.example` 提供下列設定範例，並避免提交實際 `.env`、tokens 或 credentials。
+`.env.example` 已提供 v0 所需設定範例。請不要提交實際 `.env`、tokens 或 credentials。
 
 ```env
 # Slack
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
-SLACK_SIGNING_SECRET=...
-
-# Google OAuth
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URI=http://127.0.0.1:3000/oauth/google/callback
-
-# LLM
-LLM_PROVIDER=openai
-LLM_API_KEY=...
-LLM_MODEL=...
-
-# Local storage
-DATABASE_URL=file:./data/slack-forge.sqlite
-LOCAL_DATA_DIR=./data
+SLACK_SOCKET_MODE_ENABLED=true
 
 # Local file access
 WATCHED_FOLDERS=/absolute/path/to/folder-a,/absolute/path/to/folder-b
 DENYLIST_FOLDERS=/Users/example/.ssh,/Users/example/Library
 MAX_LOCAL_FILE_BYTES=1048576
+MAX_SEARCH_RESULTS=5
+
+# Local audit
+AUDIT_LOG_PATH=./logs/audit.jsonl
 ```
 
 ## 開發與驗證
 
-目前尚未建立 `package.json`，因此還沒有可執行的 install、dev、test 或 lint 指令。建立 Node.js 專案骨架後，README 應更新為實際命令，例如：
+安裝依賴：
 
 ```sh
 npm install
-npm run dev
-npm test
-npm run lint
 ```
 
-在目前初始化階段，可用下列 repo-level 檢查：
+啟動 Local Agent：
+
+```sh
+npm run dev
+```
+
+執行測試與型別檢查：
+
+```sh
+npm test
+npm run typecheck
+```
+
+repo-level 檢查：
 
 ```sh
 git status --short
 git diff --check
 ```
 
+## Slack Local File Search v0 Demo Flow
+
+1. 在 Slack app 啟用 Socket Mode，並建立 `/agent` slash command。
+2. 設定 `.env`，包含 `SLACK_BOT_TOKEN`、`SLACK_APP_TOKEN`、`WATCHED_FOLDERS` 與 `AUDIT_LOG_PATH`。
+3. 在使用者電腦上執行 `npm run dev` 啟動 Local Agent。
+4. 在 Slack 執行 `/agent find onboarding`。
+5. 確認 Slack 回覆只包含 allowlisted folders 內的 filename、path、match type 與 snippet。
+6. 檢查 `AUDIT_LOG_PATH` 是否新增一筆 JSONL audit entry。
+
+v0 手動驗收應覆蓋：成功搜尋、no result、denylist folder 不被讀取、oversized file 被跳過、empty query 被拒絕、Local Agent 停止時 Slack 無法查 local files。
+
 ## 文件導覽
 
 - `docs/repo-goal/00-poc.md`: 三天 POC 分析、架構建議、phase 規劃與驗收標準。
+- `docs/repo-goal/01-accelerated-local-file-search.md`: Slack Local File Search v0 的加速 phase、runtime decision 與驗收標準。
 - `docs/memory/`: 專案決策、進度與下一步紀錄。
 - `AGENTS.md`: Agent 工作規則、測試要求與文件更新要求。
 
 ## 目前狀態
 
-目前狀態是 repo 文件初始化。下一步是建立 Node.js/TypeScript 專案骨架、設定 Slack Bolt Socket Mode、建立 SQLite schema 與 repository interfaces。
+目前狀態是 Slack Local File Search v0 skeleton 已建立。已包含 config validation、guarded direct local search、Slack `/agent find <query>` command handler、JSONL audit log 與 behavior-focused tests。下一步是用真實 Slack internal/test app 與安全的 watched folder 進行手動 UAT。
