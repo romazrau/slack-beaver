@@ -174,8 +174,13 @@ Slack app 需要啟用：
 - Socket Mode: enabled
 - Slash command: `/agent`
 - Usage hint: `find <query>`
+- App Home Home tab: enabled
+- App Home Messages tab: enabled
+- App Home Messages tab user messages: enabled
+- Event Subscriptions: enabled
+- Bot events: `app_home_opened`, `message.im`
 - OAuth scopes used for Slack-native UI: `commands`, `chat:write`, `im:history`
-- Bot events used for Slack-native UI: `app_home_opened`, `message.im`
+- Reinstall after App Home chat setup: completed
 
 機密處理規則：
 
@@ -227,6 +232,12 @@ launchctl remove slack-beaver-local-agent
 - Slack returned 3 local file matches from the allowlisted `docs` folder.
 - Response was visible only to the requester.
 - `logs/audit.jsonl` recorded `status=success`, query, result count, Slack user ID, channel ID, and timestamp without full file contents.
+- App Home Home tab was opened from Slack left sidebar > Applications > `Slack Beaver Local Agent`.
+- Home tab rendered Local Agent status, watched folder count, denylist count, max results, and `find <query>` without token values or local folder paths.
+- Messages tab accepted `find Socket` and returned local file results in the app chat.
+- Messages tab accepted `list tasks` and returned `Unsupported command. Usage: find <query>`.
+- Messages tab accepted a no-result query and returned a clear no-result response.
+- `logs/audit.jsonl` recorded App Home successful and no-result searches with `source=app_home_message`.
 
 ## 文件導覽
 

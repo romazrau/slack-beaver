@@ -26,6 +26,7 @@ Slack /agent find <query>
 - Event Subscriptions are enabled.
 - Bot events include `app_home_opened` and `message.im`.
 - Bot scopes include `commands`, `chat:write`, and `im:history`.
+- The app has been reinstalled after scope or event changes.
 - `.env` exists locally and is not committed.
 
 Secret rules:
@@ -98,6 +99,26 @@ Expected behavior:
 - Bot replies in the app chat with the same result format as `/agent find Socket`.
 - `AUDIT_LOG_PATH` receives one JSONL entry with `source=app_home_message`.
 - `/agent find Socket` continues to write `source=slash_command`.
+
+Actual `For Coding` configuration verified on 2026-06-28:
+
+- App Home Home tab is enabled.
+- App Home Messages tab is enabled.
+- Messages tab allows users to send slash commands and messages.
+- Event Subscriptions are enabled.
+- Socket Mode is enabled, so Event Subscriptions do not require a Request URL.
+- Bot events are `app_home_opened` and `message.im`.
+- Bot scopes are `commands`, `chat:write`, and `im:history`.
+- App reinstall to `For Coding` completed after changing scopes and events.
+
+Actual App Home live UAT verified on 2026-06-28:
+
+- Home tab rendered Local Agent status and command guidance.
+- Home tab did not expose token values or local folder paths.
+- Messages tab `find Socket` returned local file results.
+- Messages tab `list tasks` returned `Unsupported command. Usage: find <query>`.
+- Messages tab no-result query returned a clear no-result response.
+- `logs/audit.jsonl` recorded App Home searches with `source=app_home_message`.
 
 ## Optional launchctl Demo
 

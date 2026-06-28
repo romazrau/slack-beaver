@@ -32,8 +32,11 @@ Users should be able to open `Slack Beaver Local Agent` from Slack's left sideba
 ## Slack App Settings Required
 
 - App Home enabled.
+- Home tab enabled.
 - Messages tab enabled.
+- Messages tab allows users to send slash commands and messages.
 - Event Subscriptions enabled.
+- Socket Mode enabled; no Event Subscriptions Request URL is required for this local agent.
 - Bot events:
   - `app_home_opened`
   - `message.im`
@@ -44,11 +47,29 @@ Users should be able to open `Slack Beaver Local Agent` from Slack's left sideba
 
 After changing scopes or event subscriptions, reinstall the app to the `For Coding` workspace.
 
-## Validation Needed
+## Actual Configuration
 
-- Open `Slack Beaver Local Agent` from Slack's Applications section.
-- Confirm Home tab renders status and command guidance without secrets or local paths.
-- In Messages tab, send `find Socket`.
-- Confirm Slack replies with local file results.
-- Confirm audit log records `source=app_home_message`.
-- Confirm `/agent find Socket` still works and records `source=slash_command`.
+Verified on 2026-06-28 in the `For Coding` workspace:
+
+- App Home Home tab is enabled.
+- App Home Messages tab is enabled.
+- Messages tab user input is enabled.
+- Event Subscriptions are enabled.
+- Bot events include `app_home_opened` and `message.im`.
+- Bot scopes include `commands`, `chat:write`, and `im:history`.
+- The app was reinstalled after scope and event changes.
+- Actual token values remain only in local `.env` and were not documented.
+
+## Validation Result
+
+Verified on 2026-06-28:
+
+- Opened `Slack Beaver Local Agent` from Slack's Applications section.
+- Confirmed the Home tab renders status and command guidance without secrets or local paths.
+- Sent `find Socket` in the Messages tab.
+- Confirmed Slack replied with local file results in the app chat.
+- Sent `list tasks` in the Messages tab.
+- Confirmed Slack replied with `Unsupported command. Usage: find <query>`.
+- Sent a no-result query in the Messages tab.
+- Confirmed Slack replied with a clear no-result response.
+- Confirmed audit log records App Home searches with `source=app_home_message`.
