@@ -21,12 +21,12 @@
 - `logs/audit.jsonl` recorded the successful search without full file contents.
 - `@slack/bolt` runtime loading required an ESM/CommonJS interop fix, committed as `923cce3 fix(slack): load Bolt app in ESM runtime`.
 - Fixture UAT passed for successful search, no result, denylist skip, oversized skip, and empty query rejection.
-- Remaining Slack-visible UAT was not completed in the latest execution because Chrome UI automation was unavailable.
+- Chrome-visible Slack UAT passed after Chrome was restarted: successful search, no-result search, invalid command, and Local Agent offline behavior.
 
 ## Likely Next Work
 
 - Execute Phase 4.5 demo hardening.
-- Run the remaining Slack-visible manual UAT cases from `docs/runbooks/slack-local-file-search-v0.md`.
 - Decide whether invalid `/agent` attempts should be audited.
+- Optionally repeat denylist and oversized checks through Slack with a temporary fixture config.
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.
 - Keep Phase 5 local index cache deferred until v0 Slack-visible UAT and daemon/runbook gaps are closed.

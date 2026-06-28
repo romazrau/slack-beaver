@@ -178,7 +178,14 @@ Blocked for live Slack UI in this execution:
 - Remaining Slack-visible UAT commands could not be sent because Chrome UI automation was unavailable in this turn.
 - The commands and expected results are documented in the runbook for manual execution.
 
+Follow-up verification:
+
+- After Chrome was restarted, the Chrome plugin successfully claimed the existing Slack `#社交` tab.
+- Slack-visible UAT passed for successful search, no-result search, invalid command, and Local Agent offline behavior.
+- Invalid command currently does not write an audit entry; this remains an explicit product decision before Phase 5.
+- Denylist and oversized behavior passed local fixture UAT and can be repeated through Slack with a temporary fixture config if a full end-to-end fixture demo is needed.
+
 Decision:
 
 - Do not start SQLite local index cache yet.
-- Next practical work is Phase 4.5 demo hardening: finish Slack-visible UAT, decide invalid-command audit behavior, and replace ad hoc `launchctl submit` with either foreground-only documentation or a real LaunchAgent plist template.
+- Next practical work is Phase 4.5 demo hardening: decide invalid-command audit behavior, optionally repeat fixture-only denylist/oversized cases through Slack, and replace ad hoc `launchctl submit` with either foreground-only documentation or a real LaunchAgent plist template.
