@@ -20,7 +20,9 @@
 - `docs/memory/readme-documentation-scope.md` records the decision to keep operational setup and planning details out of README.
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` now records the implemented Local Memory and OpenAI token safety slice.
 - `docs/repo-goal/04-openai-agent-runner.md` now defines the next phase for a guarded OpenAI-backed `ask <question>` flow.
+- `docs/repo-goal/05-agent-conversation-context-and-tools.md` now defines the planned App DM natural conversation mode, agent-readable tool catalog, and 8-turn context summarization policy.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
+- `docs/memory/agent-conversation-context-and-tools.md` records the defaults and scope for the planned conversation context and tool catalog phase.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
 - Source code now includes a guarded OpenAI-backed `ask <question>` runner that can only use validated Tool Registry `local_search` calls.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
@@ -45,8 +47,8 @@
 
 ## Likely Next Work
 
+- Implement App DM natural conversation mode with persisted turns, 8-turn context retention, summarization, and an agent-readable tool catalog.
 - Run live Slack UAT for `ask <question>` with a real local OpenAI token.
 - Expand prompt-injection fixtures beyond the current unknown-tool and malformed-input tests.
-- Decide whether invalid `/agent` and invalid App Home message attempts should be audited.
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.
 - Keep Phase 5 local index cache deferred until v0 Slack-visible UAT and daemon/runbook gaps are closed.

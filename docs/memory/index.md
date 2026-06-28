@@ -5,6 +5,7 @@ This directory records project decisions, implementation notes, progress, and ne
 ## Entries
 
 - `00-now-and-next.md`: Current project state, validation status, and active next phase.
+- `agent-conversation-context-and-tools.md`: Planned App DM natural conversation, agent-readable tool catalog, and 8-turn context summarization policy.
 - `accelerated-local-file-search.md`: Decision to prioritize a local Slack bot file search slice and require a user-run Local Agent process under tighter time constraints.
 - `doc-test-fixtures.md`: Synthetic local-search fixture corpus for poetry, literature, markets, news-style briefs, conversations, and task lists.
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.
