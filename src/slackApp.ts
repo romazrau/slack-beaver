@@ -1,4 +1,5 @@
-import { App } from "@slack/bolt";
+import slackBolt from "@slack/bolt";
+import type { App as SlackBoltApp } from "@slack/bolt";
 import type { AppConfig } from "./config.js";
 import { writeAuditLog } from "./auditLog.js";
 import { searchLocalFiles } from "./localSearch.js";
@@ -8,12 +9,12 @@ import {
   parseAgentCommand
 } from "./slackResponses.js";
 
-export function createSlackApp(config: AppConfig): App {
+export function createSlackApp(config: AppConfig): SlackBoltApp {
   if (!config.slack.botToken || !config.slack.appToken) {
     throw new Error("Slack tokens are required to create the Slack app.");
   }
 
-  const app = new App({
+  const app = new slackBolt.App({
     token: config.slack.botToken,
     appToken: config.slack.appToken,
     socketMode: true
