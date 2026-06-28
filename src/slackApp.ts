@@ -1,13 +1,8 @@
 import slackBolt from "@slack/bolt";
 import type { App as SlackBoltApp } from "@slack/bolt";
+import { runAgentTextCommand } from "./agentCommands.js";
+import { buildAppHomeView } from "./appHomeView.js";
 import type { AppConfig } from "./config.js";
-import { writeAuditLog } from "./auditLog.js";
-import { searchLocalFiles } from "./localSearch.js";
-import {
-  formatErrorResponse,
-  formatSearchResponse,
-  parseAgentCommand
-} from "./slackResponses.js";
 
 export function createSlackApp(config: AppConfig): SlackBoltApp {
   if (!config.slack.botToken || !config.slack.appToken) {
@@ -23,38 +18,68 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
   app.command("/agent", async ({ command, ack, respond, logger }) => {
     await ack();
 
-    const parsed = parseAgentCommand(command.text);
-    if (parsed.type === "invalid") {
-      await respond(parsed.reason);
-      return;
-    }
+    const response = await runAgentTextCommand({
+      text: command.text,
+      slackUserId: command.user_id,
+      channelId: command.channel_id,
+      source: "slash_command",
+      config,
+      logger
+    });
+    await respond(response);
+  });
 
+  app.event("app_home_opened", async ({ event, client, logger }) => {
     try {
-      const results = await searchLocalFiles(parsed.query, config.localFiles);
-      await writeAuditLog(config.auditLogPath, {
-        timestamp: new Date().toISOString(),
-        slackUserId: command.user_id,
-        channelId: command.channel_id,
-        query: parsed.query,
-        resultCount: results.length,
-        status: "success"
+      await client.views.publish({
+        user_id: event.user,
+        view: buildAppHomeView(config)
       });
-      await respond(formatSearchResponse(parsed.query, results));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       logger.error(message);
-      await writeAuditLog(config.auditLogPath, {
-        timestamp: new Date().toISOString(),
-        slackUserId: command.user_id,
-        channelId: command.channel_id,
-        query: parsed.query,
-        resultCount: 0,
-        status: "error",
-        errorSummary: message
-      });
-      await respond(formatErrorResponse(message));
     }
   });
 
+  app.message(async ({ message, say, logger }) => {
+    if (!isDirectUserMessage(message)) {
+      return;
+    }
+
+    const response = await runAgentTextCommand({
+      text: message.text,
+      slackUserId: message.user,
+      channelId: message.channel,
+      source: "app_home_message",
+      config,
+      logger
+    });
+    await say(response);
+  });
+
   return app;
+}
+
+type SlackMessage = {
+  channel_type?: string;
+  subtype?: string;
+  bot_id?: string;
+  user?: string;
+  channel?: string;
+  text?: string;
+};
+
+export function isDirectUserMessage(message: unknown): message is Required<
+  Pick<SlackMessage, "user" | "channel" | "text">
+> &
+  SlackMessage {
+  const candidate = message as SlackMessage;
+  return (
+    candidate.channel_type === "im" &&
+    candidate.subtype === undefined &&
+    candidate.bot_id === undefined &&
+    typeof candidate.user === "string" &&
+    typeof candidate.channel === "string" &&
+    typeof candidate.text === "string"
+  );
 }

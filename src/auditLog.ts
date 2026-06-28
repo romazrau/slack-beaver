@@ -8,6 +8,7 @@ export type AuditLogEntry = {
   query: string;
   resultCount: number;
   status: "success" | "error";
+  source?: "slash_command" | "app_home_message";
   errorSummary?: string;
 };
 

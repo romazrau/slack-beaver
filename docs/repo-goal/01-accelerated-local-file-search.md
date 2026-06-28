@@ -193,6 +193,12 @@ Make the local search demo traceable and safe enough to show.
 
 ## Deferred Phases
 
+### Phase 4.6: Slack App Home Chat
+
+Add Slack-native App Home and Messages tab support so the app can be opened from Slack's Applications sidebar and used as a private chat surface. This keeps Slack as the UI and does not introduce a separate desktop app.
+
+The first chat command is `find <query>`, sharing the same guarded local search and audit behavior as `/agent find <query>`.
+
 ### Phase 5: Local Index Cache
 
 Add SQLite-backed metadata indexing for faster repeated searches. This should only start after direct local search works end to end.

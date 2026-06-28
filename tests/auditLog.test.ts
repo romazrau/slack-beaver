@@ -24,7 +24,8 @@ describe("writeAuditLog", () => {
       channelId: "C123",
       query: "onboarding",
       resultCount: 2,
-      status: "success"
+      status: "success",
+      source: "app_home_message"
     });
 
     const content = await fs.readFile(logPath, "utf8");
@@ -35,7 +36,8 @@ describe("writeAuditLog", () => {
       channelId: "C123",
       query: "onboarding",
       resultCount: 2,
-      status: "success"
+      status: "success",
+      source: "app_home_message"
     });
     expect(content).not.toContain("Welcome to the team");
   });

@@ -21,6 +21,11 @@ Slack /agent find <query>
 - A Slack internal/test app exists in the `For Coding` workspace.
 - Socket Mode is enabled.
 - `/agent` slash command exists with usage hint `find <query>`.
+- App Home is enabled.
+- Messages tab is enabled.
+- Event Subscriptions are enabled.
+- Bot events include `app_home_opened` and `message.im`.
+- Bot scopes include `commands`, `chat:write`, and `im:history`.
 - `.env` exists locally and is not committed.
 
 Secret rules:
@@ -71,6 +76,29 @@ Expected behavior:
 - Response is visible only to the requester.
 - `AUDIT_LOG_PATH` receives one JSONL entry.
 
+## App Home Chat Demo
+
+Open Slack left sidebar > Applications > `Slack Beaver Local Agent`.
+
+Home tab expected behavior:
+
+- Shows Local Agent title and read-only local search status.
+- Shows counts for watched folders and denylist folders.
+- Shows the chat command `find <query>`.
+- Does not show token values or local folder paths.
+
+Messages tab command:
+
+```text
+find Socket
+```
+
+Expected behavior:
+
+- Bot replies in the app chat with the same result format as `/agent find Socket`.
+- `AUDIT_LOG_PATH` receives one JSONL entry with `source=app_home_message`.
+- `/agent find Socket` continues to write `source=slash_command`.
+
 ## Optional launchctl Demo
 
 `launchctl submit` can start an identifiable user job, but it is not a full daemon packaging solution. Treat it as a demo convenience only. If `launchctl list slack-beaver-local-agent` cannot find the label, the job is not running and the foreground run path should be used.
@@ -103,8 +131,10 @@ Use a safe watched folder. A temporary fixture folder is recommended when testin
 | Case | Command | Expected |
 | --- | --- | --- |
 | Successful search | `/agent find alpha-visible` | At least one allowlisted result |
+| App Home search | `find alpha-visible` in app Messages tab | At least one allowlisted result |
 | No result | `/agent find missing-needle` | Clear no-result response |
 | Invalid command | `/agent` or `/agent list tasks` | Usage or unsupported command response |
+| Invalid app message | `list tasks` in app Messages tab | Usage or unsupported command response |
 | Denylist skip | `/agent find deny-secret-hit` | No denied file returned |
 | Oversized skip | `/agent find oversized-hit` | Oversized file skipped |
 | Agent offline | Stop Local Agent, then run `/agent find alpha-visible` | Slack cannot complete local search |
@@ -125,6 +155,7 @@ Expected fields:
 - `query`
 - `resultCount`
 - `status`
+- `source`
 - Optional `errorSummary`
 
 ## Cleanup

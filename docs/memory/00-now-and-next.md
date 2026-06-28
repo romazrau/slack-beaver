@@ -8,10 +8,11 @@
 - `docs/repo-goal/02-v0-facts-and-hardening.md` defines the next phase: facts inventory, remaining manual UAT, coverage gap review, demo runbook, and Phase 5 readiness decision.
 - `README.md` now describes the Local Agent runtime, Slack Socket Mode flow, setup, run, test, demo commands, For Coding workspace setup notes, daemon commands, and live UAT result.
 - `.gitignore` now protects local dependencies, build outputs, secrets, SQLite runtime files, logs, caches, and local OAuth/token artifacts.
-- Source code includes config validation, guarded direct local search, Slack `/agent find <query>` command handling, and JSONL audit logging.
+- Source code includes config validation, guarded direct local search, Slack `/agent find <query>` command handling, Slack App Home / Messages chat handling, and JSONL audit logging.
 - A real Slack app named `Slack Beaver Local Agent` exists in the `For Coding` workspace with Socket Mode enabled and `/agent find <query>` configured.
 - `docs/runbooks/slack-local-file-search-v0.md` now provides the repeatable v0 demo runbook.
 - `launchctl submit` is documented as optional demo convenience only; foreground `npm run dev` remains the reliable v0 demo path.
+- `docs/memory/slack-app-home-chat.md` records the decision to use Slack-native App Home chat instead of a desktop app.
 
 ## Validation Status
 
@@ -22,11 +23,13 @@
 - `@slack/bolt` runtime loading required an ESM/CommonJS interop fix, committed as `923cce3 fix(slack): load Bolt app in ESM runtime`.
 - Fixture UAT passed for successful search, no result, denylist skip, oversized skip, and empty query rejection.
 - Chrome-visible Slack UAT passed after Chrome was restarted: successful search, no-result search, invalid command, and Local Agent offline behavior.
+- Automated tests now cover the shared command executor, App Home view safety, audit `source`, and direct-message guard.
 
 ## Likely Next Work
 
-- Execute Phase 4.5 demo hardening.
-- Decide whether invalid `/agent` attempts should be audited.
-- Optionally repeat denylist and oversized checks through Slack with a temporary fixture config.
+- Configure Slack app settings for App Home, Messages tab, Event Subscriptions, `app_home_opened`, `message.im`, `chat:write`, and `im:history`.
+- Reinstall the Slack app to `For Coding`.
+- Run live UAT from the Slack app Messages tab with `find Socket`.
+- Decide whether invalid `/agent` and invalid App Home message attempts should be audited.
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.
 - Keep Phase 5 local index cache deferred until v0 Slack-visible UAT and daemon/runbook gaps are closed.
