@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# Test and coverage outputs
+coverage/
+.nyc_output/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local SQLite and runtime data
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
+# Logs and caches
+logs/
+*.log
+.cache/
+.tmp/
+tmp/
+
+# Local credentials and tokens
+tokens/
+credentials/
+google-token*.json
+slack-token*.json
+
+# OS and editor files
+.DS_Store
+.vscode/
+.idea/
