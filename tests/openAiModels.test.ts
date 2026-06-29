@@ -36,6 +36,11 @@ function buildConfig(): AppConfig {
       dbPath: path.join(tempDir, "memory.sqlite"),
       openAiTokenPath: path.join(tempDir, "tokens", "openai.key")
     },
+    googleWorkspace: {
+      enabled: false,
+      tokenPath: path.join(tempDir, "tokens", "google-oauth.json"),
+      redirectHost: "127.0.0.1"
+    },
     ai: {
       openAiModel: "gpt-5.5",
       maxToolTurns: 2,

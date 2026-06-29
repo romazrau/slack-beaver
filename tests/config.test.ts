@@ -11,6 +11,11 @@ describe("loadConfig", () => {
       MAX_LOCAL_FILE_BYTES: "1234",
       MAX_SEARCH_RESULTS: "7",
       LOCAL_MEMORY_ENABLED: "false",
+      GOOGLE_WORKSPACE_ENABLED: "true",
+      GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
+      GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
+      GOOGLE_TOKEN_PATH: "./tokens/google.json",
+      GOOGLE_OAUTH_REDIRECT_HOST: "localhost",
       AUDIT_LOG_PATH: "./tmp/audit.jsonl"
     });
 
@@ -20,6 +25,13 @@ describe("loadConfig", () => {
     expect(config.localFiles.maxFileBytes).toBe(1234);
     expect(config.localFiles.maxResults).toBe(7);
     expect(config.localMemory.enabled).toBe(false);
+    expect(config.googleWorkspace).toEqual({
+      enabled: true,
+      oauthClientId: "google-client-id",
+      oauthClientSecret: "google-client-secret",
+      tokenPath: "./tokens/google.json",
+      redirectHost: "localhost"
+    });
     expect(config.ai).toEqual({
       openAiModel: "gpt-5.5",
       maxToolTurns: 2,
@@ -51,6 +63,11 @@ describe("loadConfig", () => {
     expect(config.slack.botToken).toBeUndefined();
     expect(config.slack.appToken).toBeUndefined();
     expect(config.localMemory.openAiTokenPath).toBe("./tokens/openai.key");
+    expect(config.googleWorkspace).toEqual({
+      enabled: false,
+      tokenPath: "./tokens/google-oauth.json",
+      redirectHost: "127.0.0.1"
+    });
   });
 
   it("requires at least one watched folder", () => {
@@ -75,6 +92,7 @@ describe("loadConfig", () => {
       dbPath: "./tmp/memory.sqlite",
       openAiTokenPath: "./tokens/openai.key"
     });
+    expect(config.googleWorkspace.enabled).toBe(false);
   });
 
   it("loads AI model and tool-turn settings", () => {

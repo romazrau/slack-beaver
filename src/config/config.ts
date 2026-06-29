@@ -17,6 +17,13 @@ export type AppConfig = {
     dbPath: string;
     openAiTokenPath: string;
   };
+  googleWorkspace: {
+    enabled: boolean;
+    oauthClientId?: string;
+    oauthClientSecret?: string;
+    tokenPath: string;
+    redirectHost: string;
+  };
   ai: {
     openAiModel: string;
     maxToolTurns: number;
@@ -37,6 +44,8 @@ const DEFAULT_MAX_RESULTS = 5;
 const DEFAULT_AUDIT_LOG_PATH = "./logs/audit.jsonl";
 const DEFAULT_LOCAL_MEMORY_DB_PATH = "./data/slack-beaver.sqlite";
 const DEFAULT_OPENAI_TOKEN_PATH = "./tokens/openai.key";
+const DEFAULT_GOOGLE_TOKEN_PATH = "./tokens/google-oauth.json";
+const DEFAULT_GOOGLE_OAUTH_REDIRECT_HOST = "127.0.0.1";
 const DEFAULT_OPENAI_MODEL = "gpt-5.5";
 const DEFAULT_MAX_AGENT_TOOL_TURNS = 2;
 const DEFAULT_MAX_CONVERSATION_FULL_TURNS = 8;
@@ -48,6 +57,7 @@ export function loadConfig(env: Env = process.env, options: LoadConfigOptions = 
   const watchedFolders = parsePathList(env.WATCHED_FOLDERS);
   const denylistFolders = parsePathList(env.DENYLIST_FOLDERS);
   const localMemoryEnabled = parseBoolean(env.LOCAL_MEMORY_ENABLED, true);
+  const googleWorkspaceEnabled = parseBoolean(env.GOOGLE_WORKSPACE_ENABLED, false);
   const maxFileBytes = parsePositiveInteger(
     env.MAX_LOCAL_FILE_BYTES,
     DEFAULT_MAX_FILE_BYTES,
@@ -110,6 +120,13 @@ export function loadConfig(env: Env = process.env, options: LoadConfigOptions = 
       dbPath: env.LOCAL_MEMORY_DB_PATH ?? DEFAULT_LOCAL_MEMORY_DB_PATH,
       openAiTokenPath: env.OPENAI_TOKEN_PATH ?? DEFAULT_OPENAI_TOKEN_PATH
     },
+    googleWorkspace: {
+      enabled: googleWorkspaceEnabled,
+      oauthClientId: emptyToUndefined(env.GOOGLE_OAUTH_CLIENT_ID),
+      oauthClientSecret: emptyToUndefined(env.GOOGLE_OAUTH_CLIENT_SECRET),
+      tokenPath: env.GOOGLE_TOKEN_PATH ?? DEFAULT_GOOGLE_TOKEN_PATH,
+      redirectHost: env.GOOGLE_OAUTH_REDIRECT_HOST?.trim() || DEFAULT_GOOGLE_OAUTH_REDIRECT_HOST
+    },
     ai: {
       openAiModel: env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL,
       maxToolTurns,
@@ -118,6 +135,11 @@ export function loadConfig(env: Env = process.env, options: LoadConfigOptions = 
     },
     auditLogPath: env.AUDIT_LOG_PATH ?? DEFAULT_AUDIT_LOG_PATH
   };
+}
+
+function emptyToUndefined(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 function parsePathList(value: string | undefined): string[] {

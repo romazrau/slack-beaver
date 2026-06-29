@@ -21,6 +21,11 @@ describe("buildAppHomeView", () => {
         dbPath: "./data/test.sqlite",
         openAiTokenPath: "./tokens/openai.key"
       },
+      googleWorkspace: {
+        enabled: false,
+        tokenPath: "./tokens/google-oauth.json",
+        redirectHost: "127.0.0.1"
+      },
       ai: {
         openAiModel: "test-model",
         maxToolTurns: 2,
@@ -61,6 +66,11 @@ describe("buildAppHomeView", () => {
         dbPath: "./data/test.sqlite",
         openAiTokenPath: "./tokens/openai.key"
       },
+      googleWorkspace: {
+        enabled: false,
+        tokenPath: "./tokens/google-oauth.json",
+        redirectHost: "127.0.0.1"
+      },
       ai: {
         openAiModel: "test-model",
         maxToolTurns: 2,
@@ -95,6 +105,11 @@ describe("buildAppHomeView", () => {
         enabled: true,
         dbPath: "./data/test.sqlite",
         openAiTokenPath: "./tokens/openai.key"
+      },
+      googleWorkspace: {
+        enabled: false,
+        tokenPath: "./tokens/google-oauth.json",
+        redirectHost: "127.0.0.1"
       },
       ai: {
         openAiModel: "test-model",

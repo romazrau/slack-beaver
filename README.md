@@ -60,6 +60,26 @@ After the local prompt saves the token and the Local Agent is running, return to
 ask What does the deployment checklist say?
 ```
 
+## Enable Google Workspace Search
+
+Google Workspace search is optional and read-only in this version. Configure a Google OAuth client for a local app, set these local environment variables, then complete browser login on this computer:
+
+```env
+GOOGLE_WORKSPACE_ENABLED=true
+GOOGLE_OAUTH_CLIENT_ID=...
+GOOGLE_OAUTH_CLIENT_SECRET=...
+GOOGLE_TOKEN_PATH=./tokens/google-oauth.json
+GOOGLE_OAUTH_REDIRECT_HOST=127.0.0.1
+```
+
+```sh
+npm run agent:google:login
+npm run agent:google:status
+npm run agent:google:logout
+```
+
+The Google token file stays under `GOOGLE_TOKEN_PATH` with owner-only permissions. Slack Beaver records only provider status, granted scopes, and account email in SQLite. The agent can use registered read-only Gmail, Google Drive, and Google Docs tools when Google Workspace is enabled and connected.
+
 Run the main verification gate:
 
 ```sh
@@ -76,6 +96,9 @@ npm run agent:secrets:set-openai
 npm run agent:models:current
 npm run agent:models:list
 npm run agent:models:set -- gpt-5.5
+npm run agent:google:login
+npm run agent:google:status
+npm run agent:google:logout
 ```
 
 ## Current Features
@@ -88,7 +111,8 @@ npm run agent:models:set -- gpt-5.5
 - SQLite local memory for enabled folders, provider setup metadata, conversation turns, summaries, and tool-call summaries.
 - Local-only OpenAI token setup through CLI; token-like Slack messages are refused.
 - Local-only OpenAI model discovery and switching through CLI.
-- Guarded OpenAI-backed `ask <question>` flow that can only call the registered `local_search` tool.
+- Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.
+- Guarded OpenAI-backed `ask <question>` flow that can only call registered Tool Registry tools.
 - Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
 - JSONL audit log for successful and failed searchable tool activity.
 - Synthetic local-search fixtures under `doc-test/` for manual validation.
@@ -105,5 +129,6 @@ npm run agent:models:set -- gpt-5.5
 - [Agent Conversation Context And Tool Catalog](docs/repo-goal/05-agent-conversation-context-and-tools.md): planned App DM natural conversation, tool catalog, and context summarization behavior.
 - [Agent Token Onboarding](docs/repo-goal/06-agent-token-onboarding.md): user-facing local-only AI agent token setup guidance.
 - [OpenAI Model Selection](docs/repo-goal/07-openai-model-selection.md): local CLI model discovery, selected model storage, and validation criteria.
+- [Google Workspace OAuth And Read-only Tools](docs/repo-goal/08-google-workspace-oauth.md): local Google OAuth, read-only agent tools, token storage, and validation criteria.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.

@@ -79,6 +79,13 @@ MAX_AGENT_TOOL_TURNS=2
 MAX_CONVERSATION_FULL_TURNS=8
 CONVERSATION_RECENT_TURNS_AFTER_SUMMARY=4
 
+# Optional Google Workspace read-only tools
+GOOGLE_WORKSPACE_ENABLED=false
+GOOGLE_OAUTH_CLIENT_ID=
+GOOGLE_OAUTH_CLIENT_SECRET=
+GOOGLE_TOKEN_PATH=./tokens/google-oauth.json
+GOOGLE_OAUTH_REDIRECT_HOST=127.0.0.1
+
 # Local audit
 AUDIT_LOG_PATH=./logs/audit.jsonl
 ```
@@ -168,6 +175,18 @@ npm run agent:models:set -- gpt-5.5
 ```
 
 `agent:models:list` uses the saved API key to call OpenAI's model list endpoint and shows selectable Responses text models. `agent:models:set` only saves compatible models visible to that key, excluding specialized image, audio, realtime, transcription, and TTS models. The selected model is stored in local SQLite memory under `openai.model`; if no model is selected, the runtime uses `OPENAI_MODEL`, then the default `gpt-5.5`.
+
+Google Workspace read-only setup:
+
+```sh
+npm run agent:google:login
+npm run agent:google:status
+npm run agent:google:logout
+```
+
+Set `GOOGLE_WORKSPACE_ENABLED=true` and `GOOGLE_OAUTH_CLIENT_ID` before running login. The login command opens the local system browser, uses a localhost OAuth callback with PKCE and state validation, asks Google for account email plus offline read-only Gmail, Drive, and Docs scopes, and saves the token to `GOOGLE_TOKEN_PATH` with `0600` file permissions. SQLite stores only provider setup metadata, granted scopes, and account email.
+
+The first read-only Google tools exposed to the agent are `gmail_search`, `gmail_read_message`, `google_drive_search`, and `google_doc_read`. They stay behind the Tool Registry and return bounded summaries. Gmail and document bodies are treated as untrusted context and are not written to the JSONL audit log.
 
 Reset local memory with double confirmation:
 

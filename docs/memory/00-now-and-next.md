@@ -22,6 +22,7 @@
 - `docs/repo-goal/04-openai-agent-runner.md` now defines the next phase for a guarded OpenAI-backed `ask <question>` flow.
 - `docs/repo-goal/05-agent-conversation-context-and-tools.md` now defines and tracks the App DM natural conversation mode, agent-readable tool catalog, and 8-turn context summarization policy.
 - `docs/repo-goal/07-openai-model-selection.md` defines local CLI OpenAI model discovery and switching acceptance criteria.
+- `docs/repo-goal/08-google-workspace-oauth.md` defines and records local Google OAuth onboarding plus read-only Gmail, Drive, and Docs agent tools.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
 - `docs/memory/agent-conversation-context-and-tools.md` records the defaults, scope, implementation result, and validation for the conversation context and tool catalog phase.
@@ -30,6 +31,7 @@
 - Source code now includes a guarded OpenAI-backed `ask <question>` runner that can only use validated Tool Registry `local_search` calls.
 - Source code now includes App DM natural conversation, persisted conversation turns, overflow summarization, summary-plus-recent context retention, and a Tool Registry-backed agent-readable tool catalog.
 - Source code now includes local CLI OpenAI model discovery and switching, with `gpt-5.5` as the default model and selected model state stored in SQLite settings.
+- Source code now includes local CLI Google OAuth login/status/logout, owner-only Google token file handling, and read-only Gmail, Drive, and Docs Tool Registry tools.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
 - Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
@@ -56,9 +58,11 @@
 - VS Code terminal running Node.js `v22.23.1` successfully rebuilt `better-sqlite3` after a Node 20/22 native ABI mismatch; Node 22 smoke testing loaded `better-sqlite3` with `NODE_MODULE_VERSION 127`, and `npm run verify` passed.
 - Agent token onboarding validation passed with focused App Home / command / local CLI / Node preflight tests, Node 24 failure-path smoke testing, Node 22 temporary-path CLI smoke testing for `npm run agent:secrets:set-openai`, Chrome live App Home and Messages verification, and the full `npm run verify` gate under Node.js `v22.23.1`.
 - OpenAI model selection automated validation covers selectable Responses text model filtering, CLI current/list/set behavior, invalid model rejection, SQLite reset behavior, and runtime model precedence.
+- Google Workspace OAuth automated validation covers PKCE generation, OAuth state validation, token-file permission refusal, refresh-token handling, bounded Docs output, conditional Google tool exposure, and audit safety for Gmail search.
 
 ## Likely Next Work
 
+- Configure a real Google OAuth client and run local browser login plus Slack DM UAT for Gmail, Drive, and Docs read-only queries.
 - Run live Slack UAT for App DM natural conversation and `ask <question>` with a real local OpenAI token.
 - Expand prompt-injection fixtures beyond the current unknown-tool and malformed-input tests.
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.

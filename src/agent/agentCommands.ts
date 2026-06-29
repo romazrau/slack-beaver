@@ -6,6 +6,7 @@ import {
   formatResetMemorySlackGuidance,
   formatTokenRefusalGuidance
 } from "../slack/onboardingCopy.js";
+import type { GoogleWorkspaceClient } from "../google/googleWorkspace.js";
 import { formatErrorResponse, formatSearchResponse, parseAgentCommand } from "../slack/slackResponses.js";
 import { looksLikeAiToken } from "../setup/secretSetup.js";
 import { runAgentConversation, runAgentQuestion, type AgentModelClient } from "./agentRunner.js";
@@ -22,6 +23,7 @@ export type RunAgentTextCommandInput = {
   config: AppConfig;
   modelClient?: AgentModelClient;
   summarizerClient?: AgentModelClient;
+  googleWorkspaceClient?: GoogleWorkspaceClient;
   logger?: {
     error: (message: string) => void;
   };
@@ -71,7 +73,8 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
         config,
         memoryStore,
         modelClient: input.modelClient,
-        summarizerClient: input.summarizerClient
+        summarizerClient: input.summarizerClient,
+        googleWorkspaceClient: input.googleWorkspaceClient
       });
       await writeAuditLog(input.config.auditLogPath, {
         timestamp: new Date().toISOString(),
@@ -91,7 +94,8 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
         source: input.source,
         config,
         memoryStore,
-        modelClient: input.modelClient
+        modelClient: input.modelClient,
+        googleWorkspaceClient: input.googleWorkspaceClient
       });
       await writeAuditLog(input.config.auditLogPath, {
         timestamp: new Date().toISOString(),

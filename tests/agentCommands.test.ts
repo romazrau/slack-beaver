@@ -33,6 +33,11 @@ function buildConfig(): AppConfig {
       dbPath: path.join(tempDir, "memory.sqlite"),
       openAiTokenPath: path.join(tempDir, "tokens", "openai.key")
     },
+    googleWorkspace: {
+      enabled: false,
+      tokenPath: path.join(tempDir, "tokens", "google-oauth.json"),
+      redirectHost: "127.0.0.1"
+    },
     ai: {
       openAiModel: "test-model",
       maxToolTurns: 2,
@@ -202,6 +207,118 @@ describe("runAgentTextCommand", () => {
       }
     ]);
     memory.close();
+  });
+
+  it("exposes read-only Google Workspace tools when Google is connected", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        expect(input.tools.map((tool) => tool.name)).toEqual([
+          "local_search",
+          "gmail_search",
+          "gmail_read_message",
+          "google_drive_search",
+          "google_doc_read"
+        ]);
+        expect(input.instructions).toContain("gmail_search");
+        return {
+          responseId: "resp_1",
+          finalAnswer: "Google Workspace tools are available.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "Can you search my email?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("Google Workspace tools are available");
+  });
+
+  it("runs Gmail search through the Tool Registry without auditing email content", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.toolOutputs.length === 0) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "gmail_search",
+                input: { query: "migration plan" }
+              }
+            ]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.output).toContain("Migration");
+        expect(input.toolOutputs[0]?.output).toContain("secret migration detail");
+        return {
+          responseId: "resp_2",
+          finalAnswer: "I found one migration email.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "Find migration plan email",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient,
+      googleWorkspaceClient: {
+        async gmailSearch() {
+          return [
+            {
+              messageId: "msg-1",
+              subject: "Migration",
+              from: "lead@example.com",
+              date: "2026-06-29",
+              snippet: "secret migration detail"
+            }
+          ];
+        },
+        async gmailReadMessage() {
+          throw new Error("not used");
+        },
+        async googleDriveSearch() {
+          throw new Error("not used");
+        },
+        async googleDocRead() {
+          throw new Error("not used");
+        }
+      }
+    });
+
+    expect(response).toContain("one migration email");
+    const auditLine = await fs.readFile(config.auditLogPath, "utf8");
+    expect(auditLine).not.toContain("secret migration detail");
+    expect(auditLine).not.toContain("lead@example.com");
   });
 
   it("runs ask with a fake model client and audited local_search tool call", async () => {

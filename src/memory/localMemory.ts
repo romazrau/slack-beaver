@@ -204,6 +204,11 @@ export class LocalMemoryStore {
       .get(key) as Setting | undefined;
   }
 
+  deleteSetting(key: string): boolean {
+    const result = this.db.prepare("delete from settings where key = ?").run(key);
+    return result.changes > 0;
+  }
+
   recordToolCall(entry: ToolCallAudit): void {
     this.db
       .prepare(

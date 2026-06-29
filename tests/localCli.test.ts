@@ -16,7 +16,10 @@ beforeEach(async () => {
     SLACK_BOT_TOKEN: "",
     SLACK_APP_TOKEN: "",
     LOCAL_MEMORY_DB_PATH: path.join(tempDir, "memory.sqlite"),
-    OPENAI_TOKEN_PATH: path.join(tempDir, "tokens", "openai.key")
+    OPENAI_TOKEN_PATH: path.join(tempDir, "tokens", "openai.key"),
+    GOOGLE_WORKSPACE_ENABLED: "true",
+    GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
+    GOOGLE_TOKEN_PATH: path.join(tempDir, "tokens", "google-oauth.json")
   };
 });
 
@@ -95,6 +98,90 @@ describe("runLocalCli", () => {
     await expect(runLocalCli(["models:current"])).resolves.toEqual({
       code: 0,
       message: "Active OpenAI model: gpt-5.5"
+    });
+  });
+
+  it("saves Google login metadata after local OAuth succeeds", async () => {
+    const result = await runLocalCli(["google:login"], {
+      googleOAuthLogin: async ({ config }) => {
+        await fs.mkdir(path.dirname(config.googleWorkspace.tokenPath), { recursive: true });
+        await fs.writeFile(
+          config.googleWorkspace.tokenPath,
+          JSON.stringify({
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            expiresAt: Date.now() + 3600_000,
+            scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+            accountEmail: "owner@example.com"
+          }),
+          { mode: 0o600 }
+        );
+        await fs.chmod(config.googleWorkspace.tokenPath, 0o600);
+        return {
+          token: {
+            accessToken: "access-token",
+            refreshToken: "refresh-token",
+            expiresAt: Date.now() + 3600_000,
+            scopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+            accountEmail: "owner@example.com"
+          },
+          accountEmail: "owner@example.com",
+          scopes: ["https://www.googleapis.com/auth/gmail.readonly"]
+        };
+      }
+    });
+
+    expect(result).toEqual({
+      code: 0,
+      message:
+        "Google account connected locally.\nAccount: owner@example.com\nScopes: https://www.googleapis.com/auth/gmail.readonly"
+    });
+    const store = new LocalMemoryStore(process.env.LOCAL_MEMORY_DB_PATH ?? "");
+    expect(store.getProviderConfig("google")?.tokenConfigured).toBe(true);
+    expect(store.getSetting("google.account_email")?.value).toBe("owner@example.com");
+    store.close();
+  });
+
+  it("reports Google status and clears it on logout", async () => {
+    await runLocalCli(["google:login"], {
+      googleOAuthLogin: async ({ config }) => {
+        await fs.mkdir(path.dirname(config.googleWorkspace.tokenPath), { recursive: true });
+        await fs.writeFile(
+          config.googleWorkspace.tokenPath,
+          JSON.stringify({
+            accessToken: "access-token",
+            expiresAt: Date.now() + 3600_000,
+            scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+            accountEmail: "owner@example.com"
+          }),
+          { mode: 0o600 }
+        );
+        await fs.chmod(config.googleWorkspace.tokenPath, 0o600);
+        return {
+          token: {
+            accessToken: "access-token",
+            expiresAt: Date.now() + 3600_000,
+            scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+            accountEmail: "owner@example.com"
+          },
+          accountEmail: "owner@example.com",
+          scopes: ["https://www.googleapis.com/auth/drive.readonly"]
+        };
+      }
+    });
+
+    await expect(runLocalCli(["google:status"])).resolves.toEqual({
+      code: 0,
+      message:
+        "Google account is connected locally.\nAccount: owner@example.com\nScopes: https://www.googleapis.com/auth/drive.readonly"
+    });
+    await expect(runLocalCli(["google:logout"])).resolves.toEqual({
+      code: 0,
+      message: "Google account disconnected locally."
+    });
+    await expect(runLocalCli(["google:status"])).resolves.toEqual({
+      code: 0,
+      message: "Google account is not connected locally. Run `npm run agent:google:login`."
     });
   });
 

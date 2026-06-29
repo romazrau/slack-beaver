@@ -9,6 +9,15 @@ import {
   type OpenAiModelListClient
 } from "../agent/openAiModels.js";
 import { loadConfig } from "../config/config.js";
+import {
+  deleteGoogleOAuthToken,
+  GOOGLE_ACCOUNT_EMAIL_SETTING_KEY,
+  GOOGLE_GRANTED_SCOPES_SETTING_KEY,
+  GOOGLE_PROVIDER_NAME,
+  loadGoogleOAuthToken,
+  runGoogleOAuthLogin,
+  type GoogleOAuthLoginResult
+} from "../google/googleAuth.js";
 import { LocalMemoryStore } from "../memory/localMemory.js";
 import {
   formatOpenAiSetupGuidance,
@@ -25,6 +34,7 @@ type CliResult = {
 
 type LocalCliOptions = {
   openAiModelListClient?: OpenAiModelListClient;
+  googleOAuthLogin?: (input: { config: ReturnType<typeof loadConfig> }) => Promise<GoogleOAuthLoginResult>;
 };
 
 export async function runLocalCli(
@@ -100,6 +110,22 @@ export async function runLocalCli(
       return await setModel(modelId, config, store, options);
     }
 
+    if (command === "google:login") {
+      return await loginGoogle(config, store, options);
+    }
+
+    if (command === "google:status") {
+      return await googleStatus(config, store);
+    }
+
+    if (command === "google:logout") {
+      await deleteGoogleOAuthToken(config.googleWorkspace.tokenPath);
+      store.setProviderTokenConfigured(GOOGLE_PROVIDER_NAME, false);
+      store.deleteSetting(GOOGLE_GRANTED_SCOPES_SETTING_KEY);
+      store.deleteSetting(GOOGLE_ACCOUNT_EMAIL_SETTING_KEY);
+      return { code: 0, message: "Google account disconnected locally." };
+    }
+
     if (command === "memory:reset") {
       return resetMemory(rest, store);
     }
@@ -107,10 +133,74 @@ export async function runLocalCli(
     return {
       code: 1,
       message:
-        "Usage: npm run agent:folders:add -- /absolute/path | npm run agent:folders:list | npm run agent:folders:remove -- /absolute/path | npm run agent:secrets:set-openai | npm run agent:models:list | npm run agent:models:current | npm run agent:models:set -- <model-id> | npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes"
+        "Usage: npm run agent:folders:add -- /absolute/path | npm run agent:folders:list | npm run agent:folders:remove -- /absolute/path | npm run agent:secrets:set-openai | npm run agent:models:list | npm run agent:models:current | npm run agent:models:set -- <model-id> | npm run agent:google:login | npm run agent:google:status | npm run agent:google:logout | npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes"
     };
   } finally {
     store.close();
+  }
+}
+
+async function loginGoogle(
+  config: ReturnType<typeof loadConfig>,
+  store: LocalMemoryStore,
+  options: LocalCliOptions
+): Promise<CliResult> {
+  try {
+    const result = await (options.googleOAuthLogin ?? runGoogleOAuthLogin)({ config });
+    store.setProviderTokenConfigured(GOOGLE_PROVIDER_NAME, true);
+    store.setSetting(GOOGLE_GRANTED_SCOPES_SETTING_KEY, result.scopes.join(" "));
+    if (result.accountEmail) {
+      store.setSetting(GOOGLE_ACCOUNT_EMAIL_SETTING_KEY, result.accountEmail);
+    }
+
+    return {
+      code: 0,
+      message: [
+        "Google account connected locally.",
+        result.accountEmail ? `Account: ${result.accountEmail}` : undefined,
+        `Scopes: ${result.scopes.join(" ")}`
+      ]
+        .filter(Boolean)
+        .join("\n")
+    };
+  } catch (error) {
+    return {
+      code: 1,
+      message: `Unable to connect Google account. ${formatErrorMessage(error)}`
+    };
+  }
+}
+
+async function googleStatus(config: ReturnType<typeof loadConfig>, store: LocalMemoryStore): Promise<CliResult> {
+  const provider = store.getProviderConfig(GOOGLE_PROVIDER_NAME);
+  if (!provider?.tokenConfigured) {
+    return {
+      code: 0,
+      message: "Google account is not connected locally. Run `npm run agent:google:login`."
+    };
+  }
+
+  try {
+    const token = await loadGoogleOAuthToken(config.googleWorkspace.tokenPath);
+    return {
+      code: 0,
+      message: [
+        "Google account is connected locally.",
+        store.getSetting(GOOGLE_ACCOUNT_EMAIL_SETTING_KEY)?.value
+          ? `Account: ${store.getSetting(GOOGLE_ACCOUNT_EMAIL_SETTING_KEY)?.value}`
+          : token.accountEmail
+            ? `Account: ${token.accountEmail}`
+            : undefined,
+        `Scopes: ${(store.getSetting(GOOGLE_GRANTED_SCOPES_SETTING_KEY)?.value || token.scopes.join(" ")).trim()}`
+      ]
+        .filter(Boolean)
+        .join("\n")
+    };
+  } catch (error) {
+    return {
+      code: 1,
+      message: `Google account metadata exists, but the local token is not usable. ${formatErrorMessage(error)}`
+    };
   }
 }
 

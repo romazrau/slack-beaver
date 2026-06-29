@@ -10,6 +10,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `accelerated-local-file-search.md`: Decision to prioritize a local Slack bot file search slice and require a user-run Local Agent process under tighter time constraints.
 - `doc-test-fixtures.md`: Synthetic local-search fixture corpus for poetry, literature, markets, news-style briefs, conversations, and task lists.
 - `future-hybrid-routing.md`: Future Central Server routing decision for multiple Local Agents while keeping the current POC single-active-agent.
+- `google-workspace-oauth.md`: Local Google OAuth onboarding, read-only Gmail/Drive/Docs Tool Registry tools, and token/audit safety decisions.
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.
 - `node-runtime-and-native-sqlite.md`: Node.js 22 runtime standardization and `better-sqlite3` native ABI rebuild guidance.
 - `openai-agent-runner.md`: Guarded OpenAI-backed `ask <question>` runner, strict local-search tool calling, token-file loading, and fake-client tests.
