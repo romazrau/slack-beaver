@@ -93,6 +93,7 @@
 - OpenAI model selection automated validation covers selectable Responses text model filtering, CLI current/list/set behavior, invalid model rejection, SQLite reset behavior, and runtime model precedence.
 - Google Workspace OAuth automated validation covers PKCE generation, OAuth state validation, token-file permission refusal, refresh-token handling, bounded Docs output, conditional Google tool exposure, and audit safety for Gmail search.
 - Google Workspace restart guidance validation covers disabled state, missing OAuth client id, missing token, expired token without refresh token, connected metadata sync, disconnected metadata sync, and typecheck under Node.js `v22.23.1`.
+- Live Google OAuth UAT passed on 2026-06-29 with a real Google Cloud project, testing-mode OAuth consent, one test user, Gmail/Drive/Docs APIs enabled, a desktop OAuth client, local token storage at `GOOGLE_TOKEN_PATH` with `0600` permissions, and `npm run agent:google:status` confirming the connected account and read-only scopes.
 - Live Slack/OpenAI non-Google UAT passed for Local Agent startup, `find`, no-result search, simple `ask`, natural App DM Priya TODO lookup, token-like input refusal, `help`, slash-command `find`, `reset memory` guidance, App Home status, model listing, and audit-log shape.
 - Live Slack/OpenAI UAT found that selected `ask` prompts could repeat equivalent `local_search` calls and fail with `Agent exceeded the maximum tool-call turns`; automated regression coverage now protects the deterministic repeated-tool-call fallback.
 - Fixture-scope UAT found that `.env` `WATCHED_FOLDERS` and SQLite local-memory allowed folders are merged, so pure fixture UAT requires clearing or aligning `.env` watched folders.
@@ -118,7 +119,7 @@
 
 - Resolve Chrome profile blocking for direct localhost Center Server page UAT, or use an approved browser profile/settings path for local API pages.
 - Decide whether to move Slack ingress to an always-on Center Server path when automatic Slack replies are required while a user-owned Local Agent is offline.
-- Configure a real Google OAuth client and run local browser login plus Slack DM UAT for Gmail, Drive, and Docs read-only queries.
+- Run live Slack DM UAT for Gmail, Drive, and Docs read-only queries now that local Google OAuth login is connected.
 - Re-run live Slack UAT for the previously failing `ask` prompts after repeated-tool-call hardening.
 - Expand prompt-injection fixtures beyond the current unknown-tool and malformed-input tests.
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.

@@ -206,7 +206,22 @@ npm run agent:google:status
 npm run agent:google:logout
 ```
 
-Set `GOOGLE_WORKSPACE_ENABLED=true` and `GOOGLE_OAUTH_CLIENT_ID` before running login. The login command opens the local system browser, uses a localhost OAuth callback with PKCE and state validation, asks Google for account email plus offline read-only Gmail, Drive, and Docs scopes, and saves the token to `GOOGLE_TOKEN_PATH` with `0600` file permissions. SQLite stores only provider setup metadata, granted scopes, and account email.
+Google Cloud setup checklist:
+
+1. Create or select a Google Cloud project for Slack Beaver UAT.
+2. Enable Gmail API, Google Drive API, and Google Docs API.
+3. Configure Google Auth Platform / OAuth consent:
+   - App name: `Slack Beaver Local Agent`, or another clearly local test name.
+   - Audience: External, Testing.
+   - Test users: add the local Google test account used for UAT.
+4. Create an OAuth client:
+   - Application type: Desktop app.
+   - Name: `Slack Beaver Local OAuth`, or another clearly local test name.
+5. Copy the OAuth client ID and client secret into local `.env`. In the current Google Cloud UI, the desktop client secret may be under the client detail page's Additional information panel.
+
+Set `GOOGLE_WORKSPACE_ENABLED=true`, `GOOGLE_OAUTH_CLIENT_ID`, and `GOOGLE_OAUTH_CLIENT_SECRET` before running login. The login command opens the local system browser, uses a localhost OAuth callback with PKCE and state validation, asks Google for account email plus offline read-only Gmail, Drive, and Docs scopes, and saves the token to `GOOGLE_TOKEN_PATH` with `0600` file permissions. SQLite stores only provider setup metadata, granted scopes, and account email.
+
+If Chrome shows `ERR_BLOCKED_BY_CLIENT` on the final `127.0.0.1` callback page, first run `npm run agent:google:status`. In the tested Chrome profile, the visible callback page was blocked, but the local callback still completed and the token was saved successfully.
 
 Current Google OAuth scopes are:
 

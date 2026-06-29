@@ -27,9 +27,10 @@ The third-party `taylorwilsdon/google_workspace_mcp` project remains a possible 
 - Startup guidance tests cover disabled Google Workspace, missing OAuth client id, missing token, expired token without refresh token, connected metadata sync, and disconnected metadata sync.
 - `npm run typecheck` passed with Node.js 22.
 - `npm test` passed with Node.js 22.
+- Live Google OAuth UAT passed on 2026-06-29 with a Google Cloud project configured for Gmail API, Google Drive API, Google Docs API, Google Auth Platform testing audience, one test user, and a desktop OAuth client. Local `.env` stores the client ID and secret; `tokens/google-oauth.json` was created with `0600` permissions.
+- The tested Chrome profile displayed `ERR_BLOCKED_BY_CLIENT` on the final `127.0.0.1` callback page, but the localhost callback still reached the helper and `npm run agent:google:status` confirmed the connected account and read-only scopes.
 
 ## Pending
 
-- Configure a real Google OAuth client and run local browser login UAT.
 - Run Slack DM UAT with real Gmail/Drive/Docs read-only queries.
 - Decide whether future multi-user routing needs per-Slack-user Google token storage.
