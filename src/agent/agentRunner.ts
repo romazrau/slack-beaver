@@ -165,6 +165,7 @@ async function runAgentLoop(input: {
   let previousResponseId: string | undefined;
   let toolOutputs: AgentToolCallResult[] = [];
   let toolCallCount = 0;
+  const executedToolCallSignatures = new Set<string>();
 
   for (let turn = 0; turn <= input.config.ai.maxToolTurns; turn += 1) {
     const toolContext = buildToolExecutionContext(input);
@@ -194,12 +195,26 @@ async function runAgentLoop(input: {
       };
     }
 
+    if (response.toolCalls.some((toolCall) => executedToolCallSignatures.has(buildToolCallSignature(toolCall)))) {
+      return {
+        answer: buildToolOutputFallbackAnswer(toolOutputs),
+        toolCallCount
+      };
+    }
+
     if (turn === input.config.ai.maxToolTurns) {
+      if (toolOutputs.some((output) => output.resultCount > 0)) {
+        return {
+          answer: buildToolOutputFallbackAnswer(toolOutputs),
+          toolCallCount
+        };
+      }
       throw new Error("Agent exceeded the maximum tool-call turns.");
     }
 
     toolOutputs = [];
     for (const toolCall of response.toolCalls) {
+      executedToolCallSignatures.add(buildToolCallSignature(toolCall));
       const result = await runAgentToolCall(toolCall, toolContext);
       toolOutputs.push(result);
       toolCallCount += 1;
@@ -207,6 +222,122 @@ async function runAgentLoop(input: {
   }
 
   throw new Error("Agent did not finish.");
+}
+
+function buildToolCallSignature(toolCall: AgentToolCallRequest): string {
+  return JSON.stringify({
+    name: toolCall.name,
+    input: normalizeToolCallInput(toolCall.input)
+  });
+}
+
+function normalizeToolCallInput(input: unknown): unknown {
+  if (Array.isArray(input)) {
+    return input.map((item) => normalizeToolCallInput(item));
+  }
+
+  if (input && typeof input === "object") {
+    return Object.fromEntries(
+      Object.entries(input)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, value]) => [key, normalizeToolCallInput(value)])
+    );
+  }
+
+  return input;
+}
+
+function buildToolOutputFallbackAnswer(toolOutputs: AgentToolCallResult[]): string {
+  const localSearchOutputs = toolOutputs.filter((output) => output.name === "local_search");
+  if (localSearchOutputs.length > 0) {
+    return buildLocalSearchFallbackAnswer(localSearchOutputs);
+  }
+
+  const googleOutput = toolOutputs.find((output) => output.resultCount > 0);
+  if (googleOutput) {
+    return [
+      "I found context from the configured read-only tools, but could not complete another useful tool step.",
+      `Tool: ${googleOutput.name}.`,
+      `Result count: ${googleOutput.resultCount}.`
+    ].join("\n");
+  }
+
+  return "I could not produce a grounded answer from the configured local context.";
+}
+
+function buildLocalSearchFallbackAnswer(toolOutputs: AgentToolCallResult[]): string {
+  const parsed = dedupeLocalSearchResults(toolOutputs.flatMap((toolOutput) => parseLocalSearchToolOutput(toolOutput.output)));
+  if (parsed.length === 0) {
+    return "I searched the configured local context but did not find matching local files.";
+  }
+
+  return [
+    "I found these local file matches from the configured context:",
+    ...parsed.slice(0, 5).map((result) =>
+      [`- ${result.filename}`, `  Path: ${result.path}`, `  Snippet: ${result.snippet}`].join("\n")
+    )
+  ].join("\n");
+}
+
+function dedupeLocalSearchResults(
+  results: Array<{
+    filename: string;
+    path: string;
+    snippet: string;
+  }>
+): Array<{
+  filename: string;
+  path: string;
+  snippet: string;
+}> {
+  const seenPaths = new Set<string>();
+  return results.filter((result) => {
+    if (seenPaths.has(result.path)) {
+      return false;
+    }
+
+    seenPaths.add(result.path);
+    return true;
+  });
+}
+
+function parseLocalSearchToolOutput(output: string): Array<{
+  filename: string;
+  path: string;
+  snippet: string;
+}> {
+  try {
+    const parsed = JSON.parse(output) as {
+      results?: Array<{
+        filename?: unknown;
+        path?: unknown;
+        snippet?: unknown;
+      }>;
+    };
+    if (!Array.isArray(parsed.results)) {
+      return [];
+    }
+
+    return parsed.results.flatMap((result) => {
+      if (
+        typeof result.filename !== "string" ||
+        typeof result.path !== "string" ||
+        typeof result.snippet !== "string"
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          filename: result.filename,
+          path: result.path,
+          snippet: result.snippet
+        }
+      ];
+    });
+  } catch {
+    return [];
+  }
 }
 
 function buildToolExecutionContext(input: {
@@ -323,6 +454,8 @@ function buildAgentInstructions(): string {
     "Do not execute shell commands.",
     "Do not modify files.",
     "Answer from retrieved tool context when local files or Google Workspace content is needed.",
+    "When a tool result contains enough context to answer, stop calling tools and produce the final answer.",
+    "Do not repeat the same tool call with the same input.",
     "If retrieved context is insufficient, say that the configured context is insufficient.",
     "Cite or name the files, message subjects, senders, document titles, paths, or IDs you used."
   ].join("\n");

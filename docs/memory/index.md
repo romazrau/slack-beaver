@@ -8,6 +8,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `agent-conversation-context-and-tools.md`: Implemented App DM natural conversation, agent-readable tool catalog, and 8-turn context summarization policy.
 - `agent-token-onboarding.md`: Improved README, Slack App Home, and chat guidance for local-only AI agent token setup.
 - `accelerated-local-file-search.md`: Decision to prioritize a local Slack bot file search slice and require a user-run Local Agent process under tighter time constraints.
+- `central-server-todo-planning.md`: Planned Local Server, Center Server, and Center Server DB split with central TODO management as the first shared capability.
 - `doc-test-fixtures.md`: Synthetic local-search fixture corpus for poetry, literature, markets, news-style briefs, conversations, and task lists.
 - `future-hybrid-routing.md`: Future Central Server routing decision for multiple Local Agents while keeping the current POC single-active-agent.
 - `google-workspace-oauth.md`: Local Google OAuth onboarding, read-only Gmail/Drive/Docs Tool Registry tools, and token/audit safety decisions.
@@ -18,6 +19,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `project-structure-cleanup.md`: Source layout cleanup by responsibility and the standard `npm run verify` gate.
 - `readme-documentation-scope.md`: Decision to keep README limited to server startup, current features, and docs links while moving setup details into `docs/setup/`.
 - `repo-initialization.md`: Initial repository documentation and ignore-rule decisions.
+- `slack-openai-uat.md`: Live Slack/OpenAI UAT results, repeated tool-call finding, deterministic runner fallback, and fixture-scope note.
 - `slack-app-setup-and-uat.md`: Real Slack app setup, secret handling, local daemon operation, runtime fix, and live UAT results for Slack Local File Search v0.
 - `slack-app-home-chat.md`: Decision and implementation notes for Slack-native App Home and Messages tab chat.
 - `v0-facts-hardening-results.md`: Results from executing the v0 facts and hardening phase, including fixture UAT, coverage gaps, daemon finding, and Phase 5 deferral.

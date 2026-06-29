@@ -375,6 +375,117 @@ describe("runAgentTextCommand", () => {
     expect(auditLine).not.toContain("Deployment checklist says test first");
   });
 
+  it("falls back to prior local_search output when the model repeats the same tool call", async () => {
+    await fs.writeFile(path.join(tempDir, "notes.md"), "Mira deployment checklist says verify Slack UAT.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let modelCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        modelCallCount += 1;
+        if (modelCallCount === 1) {
+          expect(input.instructions).toContain("Do not repeat the same tool call with the same input");
+        } else {
+          expect(input.toolOutputs[0]?.output).toContain("notes.md");
+        }
+
+        return {
+          responseId: `resp_${modelCallCount}`,
+          toolCalls: [
+            {
+              id: `call_${modelCallCount}`,
+              name: "local_search",
+              input: { query: "Mira deployment checklist" }
+            }
+          ]
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask Which fixture mentions Mira deployment checklist?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(modelCallCount).toBe(2);
+    expect(response).toContain("notes.md");
+    expect(response).toContain("Mira deployment checklist");
+    expect(response).not.toContain("Agent exceeded");
+
+    const auditLine = await fs.readFile(config.auditLogPath, "utf8");
+    const parsed = JSON.parse(auditLine.trim());
+    expect(parsed).toMatchObject({
+      query: "Which fixture mentions Mira deployment checklist?",
+      resultCount: 1,
+      status: "success",
+      source: "app_home_message"
+    });
+    expect(auditLine).not.toContain("verify Slack UAT");
+  });
+
+  it("falls back to bounded local_search output when max tool turns are reached", async () => {
+    await fs.writeFile(path.join(tempDir, "tasks.md"), "TODO owner Priya: update the rollout runbook.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let modelCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        modelCallCount += 1;
+        if (modelCallCount === 2) {
+          expect(input.toolOutputs[0]?.output).toContain("tasks.md");
+        }
+
+        return {
+          responseId: `resp_${modelCallCount}`,
+          toolCalls: [
+            {
+              id: `call_${modelCallCount}`,
+              name: "local_search",
+              input: { query: modelCallCount === 1 ? "TODO owner Priya" : "Priya" }
+            }
+          ]
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(modelCallCount).toBe(2);
+    expect(response).toContain("tasks.md");
+    expect(response).toContain("Priya");
+    expect(response).not.toContain("Agent exceeded");
+
+    const auditLine = await fs.readFile(config.auditLogPath, "utf8");
+    const parsed = JSON.parse(auditLine.trim());
+    expect(parsed).toMatchObject({
+      query: "In local files, what TODO mentions owner Priya?",
+      resultCount: 1,
+      status: "success",
+      source: "app_home_message"
+    });
+    expect(auditLine).not.toContain("update the rollout runbook");
+  });
+
   it("retains eight full turns, summarizes overflow, then sends summary plus recent turns", async () => {
     const config = buildConfig();
     config.localFiles.watchedFolders = [];

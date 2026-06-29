@@ -20,6 +20,9 @@ the deterministic `find <query>` path.
   interface.
 - Added a bounded agent runner that can only execute model-requested tools
   through the Tool Registry.
+- Added deterministic repeated-tool-call hardening so the runner can stop an
+  identical repeated tool request and answer from the last bounded tool output
+  when possible.
 - Added strict `local_search` tool schema and validation.
 - Rejected unknown tools, extra input fields, malformed tool inputs, empty
   queries, shell-like tool names, and path-bearing `local_search` requests.
@@ -38,14 +41,21 @@ the deterministic `find <query>` path.
 ## Validation
 
 - Fake-client tests cover successful `local_search`, unknown tool rejection,
-  malformed input rejection, setup gating, audit summary behavior, and existing
-  `find` compatibility.
+  malformed input rejection, repeated `local_search` fallback, setup gating,
+  audit summary behavior, and existing `find` compatibility.
 - Token loader tests cover restrictive permissions and broad-permission
   rejection.
+- Live Slack/OpenAI UAT passed for Local Agent startup, `find`, no-result
+  search, simple `ask`, natural App DM local-file lookup, token-like input
+  refusal, `help`, slash-command `find`, `reset memory` guidance, App Home
+  status, model listing, and audit-log shape.
+- Live Slack/OpenAI UAT found selected `ask` prompts could repeat equivalent
+  `local_search` calls and exceed `MAX_AGENT_TOOL_TURNS`; the repeated-tool-call
+  fallback is the follow-up hardening for that finding.
 
 ## Deferred
 
-- Live Slack UAT with a real OpenAI token.
+- Re-run live Slack UAT for the previously failing repeated-tool-call prompts.
 - Larger prompt-injection fixture corpus.
 - AI summary memory and conversation follow-up state.
 - Multi-provider routing.

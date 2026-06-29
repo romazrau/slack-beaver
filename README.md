@@ -101,6 +101,14 @@ npm run agent:google:status
 npm run agent:google:logout
 ```
 
+## Project Areas
+
+The repository is moving toward a hybrid Local Server plus Center Server shape:
+
+- [Local Server](projects/local-server/README.md): current Slack Socket Mode Local Agent for local files, local credentials, guarded AI tools, and Slack replies.
+- [Center Server](projects/center-server/README.md): planned central HTTP runtime. The first slice is TODO management.
+- [Center Server DB](projects/center-server-db/README.md): planned central TODO persistence module, starting with SQLite.
+
 ## Current Features
 
 - Slack Socket Mode Local Agent runtime.
@@ -113,6 +121,7 @@ npm run agent:google:logout
 - Local-only OpenAI model discovery and switching through CLI.
 - Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.
 - Guarded OpenAI-backed `ask <question>` flow that can only call registered Tool Registry tools.
+- Repeated model-requested tool calls are stopped and answered from the last bounded tool output when possible.
 - Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
 - JSONL audit log for successful and failed searchable tool activity.
 - Synthetic local-search fixtures under `doc-test/` for manual validation.
@@ -130,5 +139,6 @@ npm run agent:google:logout
 - [Agent Token Onboarding](docs/repo-goal/06-agent-token-onboarding.md): user-facing local-only AI agent token setup guidance.
 - [OpenAI Model Selection](docs/repo-goal/07-openai-model-selection.md): local CLI model discovery, selected model storage, and validation criteria.
 - [Google Workspace OAuth And Read-only Tools](docs/repo-goal/08-google-workspace-oauth.md): local Google OAuth, read-only agent tools, token storage, and validation criteria.
+- [Central Server TODO Management](docs/repo-goal/09-central-server-todo.md): planned Local Server, Center Server, and Center Server DB split with TODO management as the first central capability.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.

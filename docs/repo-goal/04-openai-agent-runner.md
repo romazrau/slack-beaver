@@ -300,7 +300,16 @@ Verified with automated tests:
 
 Deferred:
 
-- Live Slack UAT with a real OpenAI token.
+- Live Slack/OpenAI UAT was run with a real local token. Simple `ask`, natural
+  App DM local-file lookup, token refusal, `help`, slash-command `find`, reset
+  guidance, App Home status, model listing, and audit-log shape passed.
+- Live UAT found selected `ask` prompts could repeat equivalent `local_search`
+  calls until `MAX_AGENT_TOOL_TURNS` was exceeded.
+- Follow-up hardening added deterministic repeated-tool-call detection. When the
+  model asks for an identical tool call again, the runner now stops executing
+  tools and answers from the previous bounded tool output when possible.
+- Automated regression coverage now protects repeated `local_search` fallback.
+- Re-run Slack UAT for the previously failing repeated-tool-call prompts.
 - Larger prompt-injection fixture corpus.
 - AI summary memory.
 - Multi-provider routing.
