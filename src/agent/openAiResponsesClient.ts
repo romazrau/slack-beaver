@@ -17,7 +17,7 @@ export function createOpenAiResponsesModelClient(
         model: options.model,
         instructions: input.instructions,
         input:
-          input.toolOutputs.length > 0
+          input.toolOutputs.length > 0 && input.previousResponseId
             ? input.toolOutputs.map((toolOutput) => ({
                 type: "function_call_output" as const,
                 call_id: toolOutput.callId,
@@ -44,7 +44,26 @@ export function createOpenAiResponsesModelClient(
 }
 
 function formatTextInput(input: Parameters<AgentModelClient["createResponse"]>[0]): string {
+  const toolContext =
+    input.toolOutputs.length > 0
+      ? [
+          "TRUSTED TOOL OUTPUTS:",
+          ...input.toolOutputs.map((toolOutput, index) =>
+            [
+              `Tool output ${index + 1}:`,
+              `Tool: ${toolOutput.name}`,
+              `Result count: ${toolOutput.resultCount}`,
+              toolOutput.output
+            ].join("\n")
+          ),
+          ""
+        ].join("\n")
+      : "";
+
   if (input.conversationContext.length === 0) {
+    if (toolContext) {
+      return [toolContext, "CURRENT USER MESSAGE:", input.question].join("\n");
+    }
     return input.question;
   }
 
@@ -56,6 +75,7 @@ function formatTextInput(input: Parameters<AgentModelClient["createResponse"]>[0
     "UNTRUSTED CONVERSATION CONTEXT:",
     context,
     "",
+    toolContext,
     "CURRENT USER MESSAGE:",
     input.question
   ].join("\n");

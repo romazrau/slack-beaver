@@ -30,8 +30,14 @@ export type AppConfig = {
     maxToolTurns: number;
     maxConversationFullTurns: number;
     conversationRecentTurnsAfterSummary: number;
+    typedWorkflowEnabled?: boolean;
   };
   auditLogPath: string;
+  agentEventLog?: {
+    mode: "summary" | "trace" | "full_local_debug";
+    retentionDays: number;
+    fullDebugRetentionDays: number;
+  };
 };
 
 type Env = Record<string, string | undefined>;
@@ -51,6 +57,10 @@ const DEFAULT_OPENAI_MODEL = "gpt-5.5";
 const DEFAULT_MAX_AGENT_TOOL_TURNS = 2;
 const DEFAULT_MAX_CONVERSATION_FULL_TURNS = 8;
 const DEFAULT_CONVERSATION_RECENT_TURNS_AFTER_SUMMARY = 4;
+const DEFAULT_TYPED_AGENT_WORKFLOW_ENABLED = true;
+const DEFAULT_AGENT_EVENT_LOG_MODE = "summary";
+const DEFAULT_AGENT_EVENT_LOG_RETENTION_DAYS = 14;
+const DEFAULT_AGENT_FULL_DEBUG_LOG_RETENTION_DAYS = 3;
 
 export function loadConfig(env: Env = process.env, options: LoadConfigOptions = {}): AppConfig {
   const requireSlackTokens = options.requireSlackTokens ?? true;
@@ -59,6 +69,10 @@ export function loadConfig(env: Env = process.env, options: LoadConfigOptions = 
   const denylistFolders = parsePathList(env.DENYLIST_FOLDERS);
   const localMemoryEnabled = parseBoolean(env.LOCAL_MEMORY_ENABLED, true);
   const googleWorkspaceEnabled = parseBoolean(env.GOOGLE_WORKSPACE_ENABLED, false);
+  const typedWorkflowEnabled = parseBoolean(
+    env.TYPED_AGENT_WORKFLOW_ENABLED,
+    DEFAULT_TYPED_AGENT_WORKFLOW_ENABLED
+  );
   const maxFileBytes = parsePositiveInteger(
     env.MAX_LOCAL_FILE_BYTES,
     DEFAULT_MAX_FILE_BYTES,
@@ -83,6 +97,17 @@ export function loadConfig(env: Env = process.env, options: LoadConfigOptions = 
     env.CONVERSATION_RECENT_TURNS_AFTER_SUMMARY,
     DEFAULT_CONVERSATION_RECENT_TURNS_AFTER_SUMMARY,
     "CONVERSATION_RECENT_TURNS_AFTER_SUMMARY"
+  );
+  const agentEventLogMode = parseAgentEventLogMode(env.AGENT_EVENT_LOG_MODE);
+  const agentEventLogRetentionDays = parsePositiveInteger(
+    env.AGENT_EVENT_LOG_RETENTION_DAYS,
+    DEFAULT_AGENT_EVENT_LOG_RETENTION_DAYS,
+    "AGENT_EVENT_LOG_RETENTION_DAYS"
+  );
+  const agentFullDebugLogRetentionDays = parsePositiveInteger(
+    env.AGENT_FULL_DEBUG_LOG_RETENTION_DAYS,
+    DEFAULT_AGENT_FULL_DEBUG_LOG_RETENTION_DAYS,
+    "AGENT_FULL_DEBUG_LOG_RETENTION_DAYS"
   );
 
   const errors: string[] = [];
@@ -133,9 +158,15 @@ export function loadConfig(env: Env = process.env, options: LoadConfigOptions = 
       openAiModel: env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL,
       maxToolTurns,
       maxConversationFullTurns,
-      conversationRecentTurnsAfterSummary
+      conversationRecentTurnsAfterSummary,
+      typedWorkflowEnabled
     },
-    auditLogPath: env.AUDIT_LOG_PATH ?? DEFAULT_AUDIT_LOG_PATH
+    auditLogPath: env.AUDIT_LOG_PATH ?? DEFAULT_AUDIT_LOG_PATH,
+    agentEventLog: {
+      mode: agentEventLogMode,
+      retentionDays: agentEventLogRetentionDays,
+      fullDebugRetentionDays: agentFullDebugLogRetentionDays
+    }
   };
 }
 
@@ -187,4 +218,15 @@ function parsePositiveInteger(
   }
 
   return parsed;
+}
+
+function parseAgentEventLogMode(value: string | undefined): NonNullable<AppConfig["agentEventLog"]>["mode"] {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return DEFAULT_AGENT_EVENT_LOG_MODE;
+  }
+  if (normalized === "summary" || normalized === "trace" || normalized === "full_local_debug") {
+    return normalized;
+  }
+  throw new Error(`AGENT_EVENT_LOG_MODE must be summary, trace, or full_local_debug.`);
 }

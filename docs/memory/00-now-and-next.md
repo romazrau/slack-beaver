@@ -31,7 +31,7 @@
 - `docs/repo-goal/12-local-agent-runtime-status.md` defines the runtime heartbeat and unavailable-agent guidance slice.
 - `docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md` now defines the selected method for Slack-native readable-scope expansion and proactive Local Agent lifecycle notices.
 - `docs/repo-goal/14-agent-retrieval-reviewer.md` defines and records the implemented retrieval planning and independent reviewer quality gate for `ask` and natural App DM answers.
-- `docs/repo-goal/15-typed-agent-workflow-and-local-observability.md` defines the planned POC architecture for a typed Chat Orchestrator, Planner, deterministic Executor, Reviewer workflow, and structured local event logs.
+- `docs/repo-goal/15-typed-agent-workflow-and-local-observability.md` defines and records the implemented POC architecture for a typed Chat Orchestrator, Planner, deterministic Executor, evidence ledger, Reviewer workflow, and structured local event logs.
 - `docs/reproducible-demo/` now provides a dedicated repeatable POC demo plan covering local Slack agent operation, Center Server task dispatch, multi-agent comparison, fixture expectations, and evidence capture.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
@@ -42,7 +42,7 @@
 - `docs/memory/remote-task-dispatch-planning.md` records the implemented first step for durable remote task dispatch without moving local files or credentials into Center Server.
 - `docs/memory/dynamic-readable-scope-and-runtime-notices.md` records the decision to keep env folders as bootstrap defaults, store runtime folder grants in SQLite, and send best-effort lifecycle notices to a configured or remembered Slack target.
 - `docs/memory/agent-retrieval-reviewer.md` records the implemented decision to ask first for subjective ambiguous requests, add an independent reviewer agent, and keep `find <query>` deterministic.
-- `docs/memory/typed-agent-workflow-and-local-observability.md` records the POC decision to keep Planner, Executor, Reviewer, and Chat Orchestrator logically separate but inside one Local Agent process, with opt-in full local debug logging and default redacted structured event logs.
+- `docs/memory/typed-agent-workflow-and-local-observability.md` records the POC decision and implementation result for keeping Planner, Executor, Reviewer, and Chat Orchestrator logically separate but inside one Local Agent process, with opt-in full local debug logging and default redacted structured event logs.
 - `projects/local-server`, `projects/center-server`, and `projects/center-server-db` document the project boundaries.
 - Source code now includes `src/center-db`, `src/center-server`, and `src/cli/centerCli.ts` for central TODO persistence, HTTP API, and local smoke commands.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
@@ -59,7 +59,9 @@
 - Local Agent startup and graceful shutdown now send best-effort online/offline Slack lifecycle notices to `LOCAL_AGENT_STATUS_CHANNEL_ID`, a subscribed Slack conversation, or a recent conversation fallback.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
 - The guarded OpenAI runner now asks a focused clarification for vague mood-based short-passage requests before search, carries short clarification follow-ups such as `安靜` back into the original request, routes retrieval draft answers through a no-tool reviewer role, and lets the reviewer accept, request more context, ask the user, or reject insufficient context.
+- The guarded OpenAI runner now has a typed workflow path with planner JSON validation, deterministic plan execution through Tool Registry, an evidence ledger, reviewer evaluation over plan/evidence/draft, and fallback to the legacy loop when planner output is invalid or disabled.
 - Agent loop trace logs now write ignored JSONL files under `logs/agent-traces/` with effective questions, concrete tool-call inputs, bounded result summaries, fallback reasons, and reviewer decisions for local debugging.
+- Agent workflow event logs now write ignored JSONL files under `logs/agent-events/` with local time, `traceId`, `turnId`, `conversationId`, Slack metadata when available, planner/executor/reviewer events, and redacted or bounded IO summaries.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
 - Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
@@ -102,6 +104,7 @@
 - Dynamic readable-scope and runtime notice implementation passed focused command, memory, Slack status, runtime notice, and config tests plus typecheck under Node.js `v22.23.1`.
 - Agent command regression validation now covers natural conversation guidance for explicit `folders add /absolute/path/to/folder` setup, `confirm folders add /absolute/path/to/folder`, and runtime status context injection.
 - Agent retrieval reviewer validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering ambiguity-first clarification, Chinese clarification follow-up handling, reviewer acceptance, reviewer-requested extra context, reviewer rejection, trace logging, audit safety, and deterministic `find` compatibility.
+- Typed agent workflow and local observability validation passed focused config, plan validation, event log, and agent command tests plus typecheck under Node.js `v22.23.1`.
 
 ## Likely Next Work
 
@@ -116,4 +119,4 @@
 - Add structured agent task result metadata before using the multi-agent comparison demo as a stronger comparable-output claim.
 - Run live Slack UAT for `folders list/add/remove`, `status subscribe`, restart online notice, and graceful-shutdown offline notice.
 - Run live Slack/OpenAI UAT for the agent retrieval reviewer flow, including vague short-passage clarification and reviewer-quality grounded answers.
-- Implement the typed agent workflow and local event logging phase: validated planner output, deterministic executor, evidence ledger, reviewer over plan/evidence/draft, and `logs/agent-events/YYYY-MM-DD.jsonl` correlation by Slack timestamp.
+- Run live Slack/OpenAI UAT for typed planner/executor/reviewer answers and verify `logs/agent-events/YYYY-MM-DD.jsonl` correlation from a Slack screenshot timestamp.

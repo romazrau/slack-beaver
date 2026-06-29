@@ -1,6 +1,6 @@
 # Typed Agent Workflow And Local Observability
 
-Status: planned.
+Status: implemented and focused automated validation passed.
 
 ## Goal
 
@@ -304,3 +304,45 @@ Manual UAT:
 - Enable `full_local_debug`, repeat one local-only test request, confirm fuller
   local debug payloads are written, then disable it.
 - Confirm token-like text and private-key-like text are redacted from logs.
+
+## Implementation Result
+
+Implemented on 2026-06-29.
+
+- Added typed planner contract validation in `src/agent/agentPlan.ts`.
+- Added deterministic plan execution in `src/agent/agentPlanExecutor.ts`.
+- Added an evidence ledger in `src/agent/evidenceLedger.ts`.
+- Added `planner` as an `AgentModelClient` purpose.
+- Added a typed workflow path before the legacy agent loop when
+  `TYPED_AGENT_WORKFLOW_ENABLED` is true.
+- Kept the legacy tool loop as a fallback when planner output is not valid JSON
+  or the planner call fails.
+- Kept `find <query>` deterministic and outside typed planning.
+- Updated the reviewer path so typed workflow review can inspect the validated
+  plan, evidence ledger, and draft answer.
+- Added `logs/agent-events/YYYY-MM-DD.jsonl` local event logging with `traceId`,
+  `turnId`, `conversationId`, agent role, event name, Slack metadata, local
+  Taipei time, and IO summary.
+- Added event log modes through `AGENT_EVENT_LOG_MODE`: `summary`, `trace`, and
+  `full_local_debug`.
+- Added retention settings through `AGENT_EVENT_LOG_RETENTION_DAYS` and
+  `AGENT_FULL_DEBUG_LOG_RETENTION_DAYS`.
+- Added redaction for likely token, secret, API key, password, and private-key
+  material before writing local event logs.
+- Updated OpenAI Responses adapter behavior so tool/evidence outputs without a
+  previous model response are sent as text context instead of invalid
+  function-call outputs.
+
+Tradeoff:
+
+- Hand-written test configs that omit `typedWorkflowEnabled` keep legacy
+  behavior. Normal `loadConfig` enables typed workflow by default. This keeps
+  existing coverage stable while allowing the POC runtime path to use typed
+  planning.
+
+Validation passed:
+
+```sh
+npm test -- tests/config.test.ts tests/agentPlan.test.ts tests/agentEventLog.test.ts tests/agentCommands.test.ts
+npm run typecheck
+```

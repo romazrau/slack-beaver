@@ -91,11 +91,43 @@ available without making it the default operating mode.
 
 ## Next Work
 
-- Add `docs/repo-goal/15-typed-agent-workflow-and-local-observability.md` as the
-  implementation plan.
-- Add a typed planner contract and validation tests.
-- Add a deterministic executor module that consumes validated plans and builds
-  an evidence ledger.
-- Update the reviewer path to evaluate plan, evidence, and draft answer.
-- Add the unified local event logger and log redaction tests.
+- Run live Slack/OpenAI UAT for the typed workflow with event log lookup from a
+  Slack screenshot timestamp.
+- Decide whether deterministic `find <query>` should also write to the unified
+  `agent-events` stream or remain audit-only for the POC.
+- Decide whether planner fallback should remain enabled by default after live
+  UAT or become stricter.
 - Keep `find <query>` deterministic and outside the typed retrieval workflow.
+
+## Implementation Result
+
+Implemented on 2026-06-29.
+
+The Local Agent now has a typed workflow path for AI retrieval answers when
+normal config enables `TYPED_AGENT_WORKFLOW_ENABLED`.
+
+The implemented path is:
+
+```text
+Chat Orchestrator
+  -> Planner role
+  -> deterministic Executor module
+  -> Evidence ledger
+  -> Draft answer
+  -> Reviewer role
+```
+
+The Executor is deterministic TypeScript code and still runs tools only through
+Tool Registry.
+
+The new local event log writes `logs/agent-events/YYYY-MM-DD.jsonl` with shared
+turn identifiers and Slack metadata when available. Event log detail is
+controlled by `AGENT_EVENT_LOG_MODE`, with summary, trace, and full local debug
+modes. The logger redacts likely secrets before writing.
+
+Focused validation passed with:
+
+```sh
+npm test -- tests/config.test.ts tests/agentPlan.test.ts tests/agentEventLog.test.ts tests/agentCommands.test.ts
+npm run typecheck
+```

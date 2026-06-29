@@ -38,7 +38,13 @@ describe("loadConfig", () => {
       openAiModel: "gpt-5.5",
       maxToolTurns: 2,
       maxConversationFullTurns: 8,
-      conversationRecentTurnsAfterSummary: 4
+      conversationRecentTurnsAfterSummary: 4,
+      typedWorkflowEnabled: true
+    });
+    expect(config.agentEventLog).toEqual({
+      mode: "summary",
+      retentionDays: 14,
+      fullDebugRetentionDays: 3
     });
     expect(config.auditLogPath).toBe("./tmp/audit.jsonl");
   });
@@ -103,14 +109,33 @@ describe("loadConfig", () => {
       OPENAI_MODEL: "gpt-test",
       MAX_AGENT_TOOL_TURNS: "3",
       MAX_CONVERSATION_FULL_TURNS: "6",
-      CONVERSATION_RECENT_TURNS_AFTER_SUMMARY: "2"
+      CONVERSATION_RECENT_TURNS_AFTER_SUMMARY: "2",
+      TYPED_AGENT_WORKFLOW_ENABLED: "false",
+      AGENT_EVENT_LOG_MODE: "trace",
+      AGENT_EVENT_LOG_RETENTION_DAYS: "9",
+      AGENT_FULL_DEBUG_LOG_RETENTION_DAYS: "2"
     });
 
     expect(config.ai).toEqual({
       openAiModel: "gpt-test",
       maxToolTurns: 3,
       maxConversationFullTurns: 6,
-      conversationRecentTurnsAfterSummary: 2
+      conversationRecentTurnsAfterSummary: 2,
+      typedWorkflowEnabled: false
     });
+    expect(config.agentEventLog).toEqual({
+      mode: "trace",
+      retentionDays: 9,
+      fullDebugRetentionDays: 2
+    });
+  });
+
+  it("rejects invalid agent event log mode", () => {
+    expect(() =>
+      loadConfig({
+        SLACK_SOCKET_MODE_ENABLED: "false",
+        AGENT_EVENT_LOG_MODE: "verbose"
+      })
+    ).toThrow("AGENT_EVENT_LOG_MODE");
   });
 });

@@ -890,6 +890,85 @@ describe("runAgentTextCommand", () => {
     expect(auditLine).not.toContain("Deployment checklist says test first");
   });
 
+  it("runs typed planner, deterministic executor, evidence, and reviewer when enabled", async () => {
+    await fs.writeFile(path.join(tempDir, "notes.md"), "Typed workflow says validate the plan first.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.agentEventLog = {
+      mode: "trace",
+      retentionDays: 14,
+      fullDebugRetentionDays: 3
+    };
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    const purposes: string[] = [];
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        purposes.push(input.purpose);
+        if (input.purpose === "planner") {
+          expect(input.tools).toEqual([]);
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "Typed workflow" }],
+              reads: [{ tool: "local_file_read", fromSearchIndex: 0 }],
+              readPolicy: { maxReads: 1, reason: "Need exact source text." }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          expect(input.question).toContain("Validated retrieval plan");
+          expect(input.question).toContain("Evidence ledger");
+          expect(input.tools).toEqual([]);
+          return reviewerAcceptResponse();
+        }
+
+        expect(input.tools).toEqual([]);
+        expect(input.question).toContain("Evidence ledger");
+        expect(input.toolOutputs.some((output) => output.name === "local_file_read")).toBe(true);
+        return {
+          responseId: "draft_1",
+          finalAnswer: "Validate the plan first. Source: notes.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask What does typed workflow say?",
+      slackUserId: "U123",
+      channelId: "D123",
+      threadTs: "1710000000.000100",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("Validate the plan first");
+    expect(purposes).toEqual(["planner", "question", "reviewer"]);
+
+    const eventDir = path.join(path.dirname(config.auditLogPath), "agent-events");
+    const eventFiles = await fs.readdir(eventDir);
+    const eventContent = await fs.readFile(path.join(eventDir, eventFiles[0] ?? ""), "utf8");
+    expect(eventContent).toContain("\"event\":\"slack_message_received\"");
+    expect(eventContent).toContain("\"event\":\"planner_output\"");
+    expect(eventContent).toContain("\"event\":\"tool_call_start\"");
+    expect(eventContent).toContain("\"event\":\"evidence_ledger_updated\"");
+    expect(eventContent).toContain("\"event\":\"reviewer_decision\"");
+    expect(eventContent).toContain("\"event\":\"slack_reply_sent\"");
+    expect(eventContent).toContain("\"conversationId\":\"slack:D123:1710000000.000100\"");
+    expect(eventContent).toContain("\"channelId\":\"D123\"");
+  });
+
   it("asks one clarification for vague subjective short-passage requests before searching", async () => {
     await fs.writeFile(path.join(tempDir, "00-poc.md"), "POC planning note that should not be returned raw.", "utf8");
     const config = buildConfig();

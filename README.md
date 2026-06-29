@@ -96,6 +96,12 @@ npm run agent:models:list
 npm run agent:models:set -- gpt-5.5
 ```
 
+Typed retrieval planning is enabled by default for AI answers loaded through normal config. It asks a planner model role for a validated JSON plan, executes approved tool steps through deterministic code and Tool Registry, drafts from the gathered evidence, and sends the draft through the reviewer role. To temporarily return to the legacy tool loop while debugging, set:
+
+```env
+TYPED_AGENT_WORKFLOW_ENABLED=false
+```
+
 After the local prompt saves the token and the Local Agent is running, return to the Slack app Messages tab and type:
 
 ```text
@@ -121,6 +127,20 @@ npm run agent:google:logout
 ```
 
 The Google token file stays under `GOOGLE_TOKEN_PATH` with owner-only permissions. Slack Beaver records only provider status, granted scopes, and account email in SQLite. The agent can use registered read-only Gmail, Google Drive, and Google Docs tools when Google Workspace is enabled and connected.
+
+## Local Agent Logs
+
+Slack Beaver writes local JSONL logs for audit and debugging. `logs/audit.jsonl` records searchable activity summaries. AI workflow events are written under `logs/agent-events/YYYY-MM-DD.jsonl` with `traceId`, `turnId`, `conversationId`, Slack channel/user metadata when available, agent role, event name, and IO summary. This makes a Slack screenshot timestamp traceable to nearby local agent events.
+
+Event log detail is configurable:
+
+```env
+AGENT_EVENT_LOG_MODE=summary
+AGENT_EVENT_LOG_RETENTION_DAYS=14
+AGENT_FULL_DEBUG_LOG_RETENTION_DAYS=3
+```
+
+`summary` is the default. `trace` includes structured planner/reviewer JSON, tool inputs, bounded previews, and source locators. `full_local_debug` is local-only diagnosis mode for fuller payloads and should be kept short-lived. Logs still redact likely tokens, secrets, and private key material before writing.
 
 Run the main verification gate:
 
@@ -174,8 +194,10 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - Local-only OpenAI model discovery and switching through CLI.
 - Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.
 - Guarded OpenAI-backed `ask <question>` flow that can only call registered Tool Registry tools.
+- Typed planner, deterministic executor, evidence ledger, and reviewer workflow for AI retrieval answers when `TYPED_AGENT_WORKFLOW_ENABLED` is true.
 - Read-only local file content tool for bounded follow-up reads after local search.
 - Retrieval answers from `ask <question>` and natural App DM are reviewed before Slack delivery when tool context was used; subjective short-passage requests ask a focused clarification before searching and short follow-up answers are carried back into the original request.
+- Agent workflow event logs are written under ignored `logs/agent-events/` JSONL files with local time, Slack correlation metadata, planner/executor/reviewer events, and redacted or bounded IO summaries.
 - Agent loop trace logs are written under ignored `logs/agent-traces/` JSONL files with tool-call inputs, bounded result summaries, fallback reasons, and reviewer decisions for local debugging.
 - Repeated model-requested tool calls are stopped and answered from the last bounded tool output when possible.
 - Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
@@ -205,5 +227,6 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - [Local Agent Runtime Status](docs/repo-goal/12-local-agent-runtime-status.md): runtime heartbeat status in Slack App Home and fixed unavailable-agent guidance.
 - [Dynamic Readable Scope And Runtime Notices](docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md): selected plan for Slack-native folder scope expansion plus Local Agent online/offline notices.
 - [Agent Retrieval Reviewer](docs/repo-goal/14-agent-retrieval-reviewer.md): implemented ambiguity handling and reviewer quality gate for `ask` and App DM answers.
+- [Typed Agent Workflow And Local Observability](docs/repo-goal/15-typed-agent-workflow-and-local-observability.md): typed planner/executor/reviewer workflow and local structured event logs.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.

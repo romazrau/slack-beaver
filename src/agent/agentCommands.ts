@@ -89,7 +89,14 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
         memoryStore,
         modelClient: input.modelClient,
         summarizerClient: input.summarizerClient,
-        googleWorkspaceClient: input.googleWorkspaceClient
+        googleWorkspaceClient: input.googleWorkspaceClient,
+        observability: {
+          slack: {
+            userId: input.slackUserId,
+            channelId: input.channelId,
+            threadTs: input.threadTs
+          }
+        }
       });
       await writeAuditLog(input.config.auditLogPath, {
         timestamp: new Date().toISOString(),
@@ -110,7 +117,14 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
         config,
         memoryStore,
         modelClient: input.modelClient,
-        googleWorkspaceClient: input.googleWorkspaceClient
+        googleWorkspaceClient: input.googleWorkspaceClient,
+        observability: {
+          slack: {
+            userId: input.slackUserId,
+            channelId: input.channelId,
+            threadTs: input.threadTs
+          }
+        }
       });
       await writeAuditLog(input.config.auditLogPath, {
         timestamp: new Date().toISOString(),
