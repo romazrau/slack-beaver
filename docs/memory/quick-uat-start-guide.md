@@ -36,11 +36,14 @@ Add one-line npm startup commands backed by `scripts/uat-start.cjs`:
 - Reset-state startup documents that SQLite local memory is cleared, but token
   files and `.env` are kept.
 - Center Server TODO UAT is included as an optional part of each path.
+- First and reset startup default to this repository's `doc-test/` fixture
+  folder, assembled from the repository root at runtime.
 - `UAT_FOLDER` can override the default fixture folder for first and reset
   startup.
 
 ## Validation
 
-- `tests/uatStartScript.test.ts` covers unknown startup mode and dry-run resume
-  behavior without starting the Local Agent.
+- `tests/uatStartScript.test.ts` covers unknown startup mode, dry-run resume
+  behavior without starting the Local Agent, and the repository-local default
+  UAT fixture folder.
 - `npm run verify` passed with 19 test files and 92 tests.

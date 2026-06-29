@@ -86,7 +86,7 @@ npm run agent:folders:list
 For fixture UAT, use the local fixture corpus:
 
 ```sh
-npm run agent:folders:add -- /Users/romazrau/dev/doc-test
+npm run agent:folders:add -- ./doc-test
 ```
 
 5. Set the AI agent token locally.
@@ -241,7 +241,7 @@ This keeps:
 3. Re-add the UAT folder.
 
 ```sh
-npm run agent:folders:add -- /Users/romazrau/dev/doc-test
+npm run agent:folders:add -- ./doc-test
 npm run agent:folders:list
 ```
 

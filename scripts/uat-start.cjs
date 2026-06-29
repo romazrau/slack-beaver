@@ -5,7 +5,7 @@ const { spawnSync } = require("node:child_process");
 
 const mode = process.argv[2];
 const repoRoot = path.resolve(__dirname, "..");
-const fixturePath = process.env.UAT_FOLDER || "/Users/romazrau/dev/doc-test";
+const fixturePath = process.env.UAT_FOLDER || path.join(repoRoot, "doc-test");
 const setupDoc = "docs/setup/slack-api-and-local-runtime.md";
 const quickGuide = "docs/runbooks/quick-uat-start.md";
 const dryRun = process.env.UAT_DRY_RUN === "true";

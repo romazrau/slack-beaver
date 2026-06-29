@@ -31,4 +31,21 @@ describe("UAT startup script", () => {
     expect(result.stdout).toContain("Slack Beaver UAT startup: resume");
     expect(result.stdout).toContain("Dry run: would start Local Agent");
   });
+
+  it("uses the repository doc-test folder as the default UAT folder", () => {
+    const result = spawnSync(nodeBin, [scriptPath, "reset"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        UAT_DRY_RUN: "true",
+        UAT_FOLDER: ""
+      }
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain(
+      `Dry run: would run \`npm run agent:folders:add -- ${path.join(repoRoot, "doc-test")}\`.`
+    );
+  });
 });

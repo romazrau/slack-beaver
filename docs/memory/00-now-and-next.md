@@ -9,7 +9,7 @@
 - `README.md` is now a compact entry point for starting the Local Agent server, running verification, seeing current features, and navigating deeper docs.
 - `docs/setup/slack-api-and-local-runtime.md` now owns Slack app settings, local `.env` setup, secret handling, local CLI setup commands, and optional `launchctl submit` demo notes.
 - `docs/runbooks/quick-uat-start.md` now provides first-startup, resume-startup, and reset-state startup paths for manual UAT.
-- `npm run uat:first`, `npm run uat:resume`, and `npm run uat:reset` now provide one-line Local Agent UAT startup paths backed by `scripts/uat-start.cjs`.
+- `npm run uat:first`, `npm run uat:resume`, and `npm run uat:reset` now provide one-line Local Agent UAT startup paths backed by `scripts/uat-start.cjs`, with the default UAT fixture folder resolved from this repository's `doc-test/`.
 - `.gitignore` now protects local dependencies, build outputs, secrets, SQLite runtime files, logs, caches, and local OAuth/token artifacts.
 - Source code includes config validation, guarded direct local search, Slack `/agent find <query>` command handling, Slack App Home / Messages chat handling, and JSONL audit logging.
 - A real Slack app named `Slack Beaver Local Agent` exists in the `For Coding` workspace with Socket Mode enabled and `/agent find <query>` configured.
@@ -100,6 +100,7 @@
 - Chrome UAT confirmed the current Chrome profile still blocks direct `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; Computer Use could inspect Finder but returned `cgWindowNotFound` for Chrome.
 - Chrome/Computer Use UAT reached Chrome, but this Chrome profile blocked direct `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; the server was verified independently through local HTTP requests.
 - Quick UAT startup scripts and guide were added; `tests/uatStartScript.test.ts` covers invalid mode and dry-run resume behavior.
+- Quick UAT startup script validation now covers the repository-local default `doc-test/` fixture folder.
 - Reproducible demo planning was added as documentation only; no application logic changed.
 - Dynamic readable-scope and runtime notice planning was added as documentation only; no application logic changed in this step.
 - Dynamic readable-scope and runtime notice implementation passed focused command, memory, Slack status, runtime notice, and config tests plus typecheck under Node.js `v22.23.1`.
