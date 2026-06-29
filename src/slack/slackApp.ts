@@ -5,6 +5,8 @@ import type { AppConfig } from "../config/config.js";
 import { LocalMemoryStore, mergeUniquePaths } from "../memory/localMemory.js";
 import { buildAppHomeView } from "./appHomeView.js";
 
+export const LOCAL_AGENT_RUNTIME_PROCESS = "local-agent";
+
 export function createSlackApp(config: AppConfig): SlackBoltApp {
   if (!config.slack.botToken || !config.slack.appToken) {
     throw new Error("Slack tokens are required to create the Slack app.");
@@ -67,20 +69,36 @@ function loadAppHomeState(config: AppConfig) {
   if (!config.localMemory.enabled) {
     return {
       allowedFolderCount: config.localFiles.watchedFolders.length,
-      openAiTokenConfigured: false
+      openAiTokenConfigured: false,
+      localAgentLastSeenAt: undefined
     };
   }
 
   const store = new LocalMemoryStore(config.localMemory.dbPath);
   try {
+    const runtimeStatus = store.recordRuntimeHeartbeat(LOCAL_AGENT_RUNTIME_PROCESS);
     const folders = mergeUniquePaths(
       config.localFiles.watchedFolders,
       store.listEnabledAllowedFolderPaths()
     );
     return {
       allowedFolderCount: folders.length,
-      openAiTokenConfigured: store.getProviderConfig("openai")?.tokenConfigured ?? false
+      openAiTokenConfigured: store.getProviderConfig("openai")?.tokenConfigured ?? false,
+      localAgentLastSeenAt: runtimeStatus.lastSeenAt
     };
+  } finally {
+    store.close();
+  }
+}
+
+export function recordLocalAgentRuntimeHeartbeat(config: AppConfig): void {
+  if (!config.localMemory.enabled) {
+    return;
+  }
+
+  const store = new LocalMemoryStore(config.localMemory.dbPath);
+  try {
+    store.recordRuntimeHeartbeat(LOCAL_AGENT_RUNTIME_PROCESS);
   } finally {
     store.close();
   }

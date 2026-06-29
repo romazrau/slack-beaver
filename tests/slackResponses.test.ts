@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { formatSearchResponse, parseAgentCommand } from "../src/slack/slackResponses.js";
+import {
+  formatLocalAgentOfflineResponse,
+  formatSearchResponse,
+  parseAgentCommand
+} from "../src/slack/slackResponses.js";
 
 describe("parseAgentCommand", () => {
   it("parses find commands", () => {
@@ -41,5 +45,16 @@ describe("formatSearchResponse", () => {
 
     expect(response).toContain("&lt;unsafe&gt;");
     expect(response).toContain("&lt;tag&gt; &amp; text");
+  });
+});
+
+describe("formatLocalAgentOfflineResponse", () => {
+  it("formats a fixed offline response", () => {
+    expect(formatLocalAgentOfflineResponse()).toBe(
+      [
+        "Slack Beaver Local Agent is not reachable from this Slack conversation.",
+        "Start the Local Agent on the configured computer with `npm run dev`, then try again."
+      ].join("\n")
+    );
   });
 });

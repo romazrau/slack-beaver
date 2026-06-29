@@ -22,6 +22,11 @@ export type Setting = {
   updatedAt: string;
 };
 
+export type LocalRuntimeStatus = {
+  processName: string;
+  lastSeenAt: string;
+};
+
 export type ToolCallAudit = {
   source: string;
   toolName: string;
@@ -209,6 +214,37 @@ export class LocalMemoryStore {
     return result.changes > 0;
   }
 
+  recordRuntimeHeartbeat(processName: string, seenAt = new Date()): LocalRuntimeStatus {
+    const normalizedProcessName = requireNonEmptyString(processName, "processName");
+    const lastSeenAt = seenAt.toISOString();
+    this.db
+      .prepare(
+        `insert into runtime_heartbeats (process_name, last_seen_at)
+         values (?, ?)
+         on conflict(process_name) do update set
+           last_seen_at = excluded.last_seen_at`
+      )
+      .run(normalizedProcessName, lastSeenAt);
+
+    return {
+      processName: normalizedProcessName,
+      lastSeenAt
+    };
+  }
+
+  getRuntimeStatus(processName: string): LocalRuntimeStatus | undefined {
+    const normalizedProcessName = requireNonEmptyString(processName, "processName");
+    const row = this.db
+      .prepare(
+        `select process_name as processName, last_seen_at as lastSeenAt
+         from runtime_heartbeats
+         where process_name = ?`
+      )
+      .get(normalizedProcessName) as LocalRuntimeStatus | undefined;
+
+    return row;
+  }
+
   recordToolCall(entry: ToolCallAudit): void {
     this.db
       .prepare(
@@ -241,6 +277,7 @@ export class LocalMemoryStore {
       this.db.prepare("delete from conversation_turns").run();
       this.db.prepare("delete from tool_calls").run();
       this.db.prepare("delete from provider_config").run();
+      this.db.prepare("delete from runtime_heartbeats").run();
       this.db
         .prepare("delete from sqlite_sequence where name in ('conversations', 'conversation_turns', 'tool_calls')")
         .run();
@@ -422,6 +459,11 @@ export class LocalMemoryStore {
         token_configured integer not null default 0,
         updated_at text not null
       );
+
+      create table if not exists runtime_heartbeats (
+        process_name text primary key,
+        last_seen_at text not null
+      );
     `);
   }
 
@@ -503,6 +545,14 @@ export class LocalMemoryStore {
     };
     return row.count;
   }
+}
+
+function requireNonEmptyString(value: string, name: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${name} is required.`);
+  }
+  return trimmed;
 }
 
 export function mergeUniquePaths(left: string[], right: string[]): string[] {

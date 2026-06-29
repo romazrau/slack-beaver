@@ -1,15 +1,25 @@
 import type { KnownBlock, View } from "@slack/bolt";
 import type { AppConfig } from "../config/config.js";
 import { formatAgentTokenSetupSteps, formatSetupChecklist } from "./onboardingCopy.js";
+import { formatLocalAgentOfflineResponse } from "./slackResponses.js";
 
 export type AppHomeState = {
   allowedFolderCount?: number;
   openAiTokenConfigured?: boolean;
+  localAgentLastSeenAt?: string;
+  now?: Date;
 };
+
+const LOCAL_AGENT_STALE_AFTER_MS = 2 * 60 * 1000;
 
 export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): View {
   const watchedFolderCount = state.allowedFolderCount ?? config.localFiles.watchedFolders.length;
   const setupBlocks = watchedFolderCount === 0 ? buildSetupBlocks() : [];
+  const runtimeStatus = formatLocalAgentRuntimeStatus(
+    state.localAgentLastSeenAt,
+    state.now ?? new Date(),
+    config.localMemory.enabled
+  );
 
   const blocks: KnownBlock[] = [
     {
@@ -35,6 +45,10 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
         },
         {
           type: "mrkdwn",
+          text: `*Local Agent runtime*\n${runtimeStatus.label}`
+        },
+        {
+          type: "mrkdwn",
           text: `*Allowed folders*\n${watchedFolderCount}`
         },
         {
@@ -44,6 +58,15 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
         {
           type: "mrkdwn",
           text: `*Max results*\n${config.localFiles.maxResults}`
+        }
+      ]
+    },
+    {
+      type: "context",
+      elements: [
+        {
+          type: "mrkdwn",
+          text: runtimeStatus.detail
         }
       ]
     },
@@ -70,6 +93,45 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
   return {
     type: "home",
     blocks
+  };
+}
+
+export function formatLocalAgentRuntimeStatus(
+  lastSeenAt: string | undefined,
+  now: Date,
+  trackingEnabled = true
+): { label: string; detail: string } {
+  if (!trackingEnabled) {
+    return {
+      label: "Not tracked",
+      detail: "Local Agent runtime heartbeat is not tracked because `LOCAL_MEMORY_ENABLED` is false."
+    };
+  }
+
+  if (!lastSeenAt) {
+    return {
+      label: "Not seen yet",
+      detail: formatLocalAgentOfflineResponse()
+    };
+  }
+
+  const lastSeenMs = Date.parse(lastSeenAt);
+  if (Number.isNaN(lastSeenMs)) {
+    return {
+      label: "Unknown",
+      detail:
+        "Local Agent runtime heartbeat exists but its timestamp is not readable. Restart with `npm run dev`."
+    };
+  }
+
+  const ageMs = now.getTime() - lastSeenMs;
+  const isOnline = ageMs <= LOCAL_AGENT_STALE_AFTER_MS;
+  const label = isOnline ? "Online" : "Stale";
+  return {
+    label,
+    detail: isOnline
+      ? `Last Local Agent heartbeat: ${lastSeenAt}`
+      : `Last Local Agent heartbeat: ${lastSeenAt}\n${formatLocalAgentOfflineResponse()}`
   };
 }
 

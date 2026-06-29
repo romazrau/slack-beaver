@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAppHomeView } from "../src/slack/appHomeView.js";
+import { buildAppHomeView, formatLocalAgentRuntimeStatus } from "../src/slack/appHomeView.js";
 import type { AppConfig } from "../src/config/config.js";
 
 describe("buildAppHomeView", () => {
@@ -40,6 +40,8 @@ describe("buildAppHomeView", () => {
 
     expect(view.type).toBe("home");
     expect(serialized).toContain("Slack Beaver Local Agent");
+    expect(serialized).toContain("Local Agent runtime");
+    expect(serialized).toContain("Not seen yet");
     expect(serialized).toContain("find <query>");
     expect(serialized).toContain("Allowed folders");
     expect(serialized).toContain("Enable AI answers");
@@ -131,5 +133,30 @@ describe("buildAppHomeView", () => {
     expect(serialized).toContain("Configured locally");
     expect(serialized).toContain("Ready for `ask <question>`");
     expect(serialized).not.toContain("Enable AI answers");
+  });
+
+  it("formats local agent runtime status from heartbeat age", () => {
+    expect(
+      formatLocalAgentRuntimeStatus(
+        "2026-06-29T10:00:00.000Z",
+        new Date("2026-06-29T10:01:30.000Z")
+      )
+    ).toEqual({
+      label: "Online",
+      detail: "Last Local Agent heartbeat: 2026-06-29T10:00:00.000Z"
+    });
+
+    expect(
+      formatLocalAgentRuntimeStatus(
+        "2026-06-29T10:00:00.000Z",
+        new Date("2026-06-29T10:03:00.000Z")
+      ).label
+    ).toBe("Stale");
+    expect(formatLocalAgentRuntimeStatus(undefined, new Date("2026-06-29T10:00:00.000Z")).label).toBe(
+      "Not seen yet"
+    );
+    expect(
+      formatLocalAgentRuntimeStatus(undefined, new Date("2026-06-29T10:00:00.000Z"), false).label
+    ).toBe("Not tracked");
   });
 });

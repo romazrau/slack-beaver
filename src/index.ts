@@ -2,7 +2,7 @@ import "dotenv/config";
 import { loadConfig } from "./config/config.js";
 import { LocalMemoryStore } from "./memory/localMemory.js";
 import { formatMissingAiAgentTokenStartupGuidance } from "./setup/startupGuidance.js";
-import { createSlackApp } from "./slack/slackApp.js";
+import { createSlackApp, recordLocalAgentRuntimeHeartbeat } from "./slack/slackApp.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -13,6 +13,7 @@ async function main(): Promise<void> {
   }
 
   const app = createSlackApp(config);
+  recordLocalAgentRuntimeHeartbeat(config);
   await app.start();
   console.log("Slack Beaver Local Agent is running with Slack Socket Mode.");
   if (!isAiAgentTokenConfigured(config)) {

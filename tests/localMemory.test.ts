@@ -62,6 +62,25 @@ describe("LocalMemoryStore", () => {
     store.close();
   });
 
+  it("records runtime heartbeat state", () => {
+    const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
+
+    const first = store.recordRuntimeHeartbeat("local-agent", new Date("2026-06-29T10:00:00.000Z"));
+    const second = store.recordRuntimeHeartbeat("local-agent", new Date("2026-06-29T10:01:00.000Z"));
+
+    expect(first).toEqual({
+      processName: "local-agent",
+      lastSeenAt: "2026-06-29T10:00:00.000Z"
+    });
+    expect(second).toEqual({
+      processName: "local-agent",
+      lastSeenAt: "2026-06-29T10:01:00.000Z"
+    });
+    expect(store.getRuntimeStatus("local-agent")).toEqual(second);
+
+    store.close();
+  });
+
   it("stores conversation turns and summary by Slack conversation key", () => {
     const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
 

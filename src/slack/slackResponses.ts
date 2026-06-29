@@ -57,6 +57,13 @@ export function formatAgentAnswerResponse(answer: string): string {
   return escapeSlackText(answer);
 }
 
+export function formatLocalAgentOfflineResponse(): string {
+  return [
+    "Slack Beaver Local Agent is not reachable from this Slack conversation.",
+    "Start the Local Agent on the configured computer with `npm run dev`, then try again."
+  ].join("\n");
+}
+
 function formatUsage(): string {
   return "Usage: /agent find <query> or /agent ask <question>";
 }

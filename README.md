@@ -33,6 +33,15 @@ Start the Local Agent:
 npm run dev
 ```
 
+When the Local Agent starts, it records a local runtime heartbeat in SQLite. The Slack App Home tab shows whether that heartbeat is online, stale, or not seen yet. The fixed offline guidance is:
+
+```text
+Slack Beaver Local Agent is not reachable from this Slack conversation.
+Start the Local Agent on the configured computer with `npm run dev`, then try again.
+```
+
+In the current architecture, Slack Socket Mode ingress runs inside the Local Agent process. If that process is fully stopped, Slack events are not received by this repo until the process starts again. A fully automatic Slack reply while the Local Agent is down requires a future always-on Center Server or another Slack ingress service.
+
 Quick manual UAT startup:
 
 ```sh
@@ -134,6 +143,7 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 ## Current Features
 
 - Slack Socket Mode Local Agent runtime.
+- Local runtime heartbeat status in Slack App Home, with shared fixed offline guidance for unavailable-agent cases.
 - `/agent find <query>` slash command for read-only local file search.
 - Slack App Home and Messages tab support for `find <query>`, `ask <question>`, and natural App DM conversation.
 - Allowlisted local folder search for Markdown, text, CSV, and JSON-style local files.
@@ -168,5 +178,6 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - [Central Server TODO Management](docs/repo-goal/09-central-server-todo.md): planned Local Server, Center Server, and Center Server DB split with TODO management as the first central capability.
 - [Search, Read, And Summarize Workflow](docs/repo-goal/10-search-read-summarize.md): implemented local and Google search/read/summarize workflow plus required token access.
 - [Remote Task Dispatch And Agent Optimization](docs/repo-goal/11-remote-task-dispatch.md): implemented first hybrid dispatch slice for Center Server-owned tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
+- [Local Agent Runtime Status](docs/repo-goal/12-local-agent-runtime-status.md): runtime heartbeat status in Slack App Home and fixed unavailable-agent guidance.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.

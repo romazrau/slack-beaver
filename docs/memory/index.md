@@ -13,6 +13,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `future-hybrid-routing.md`: Future Central Server routing decision for multiple Local Agents while keeping the current POC single-active-agent.
 - `google-workspace-oauth.md`: Local Google OAuth onboarding, read-only Gmail/Drive/Docs Tool Registry tools, and token/audit safety decisions.
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.
+- `local-agent-runtime-status.md`: Local Agent runtime heartbeat, Slack App Home online/stale status, fixed unavailable-agent guidance, and current Slack ingress boundary.
 - `node-runtime-and-native-sqlite.md`: Node.js 22 runtime standardization and `better-sqlite3` native ABI rebuild guidance.
 - `openai-agent-runner.md`: Guarded OpenAI-backed `ask <question>` runner, strict local-search tool calling, token-file loading, and fake-client tests.
 - `openai-model-selection.md`: Local CLI model discovery and switching, `gpt-5.5` default, and the `List models: Read` key permission decision.

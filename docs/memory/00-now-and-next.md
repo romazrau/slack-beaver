@@ -28,6 +28,7 @@
 - `docs/repo-goal/09-central-server-todo.md` defines and records the implemented hybrid architecture slice: Local Server, Center Server, Center Server DB, and central TODO management.
 - `docs/repo-goal/10-search-read-summarize.md` now defines and records the implemented workflow for local and Google search, bounded read, summarization, citation, and required token access.
 - `docs/repo-goal/11-remote-task-dispatch.md` now defines and records the implemented first hybrid dispatch slice for Center Server-owned agent tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
+- `docs/repo-goal/12-local-agent-runtime-status.md` defines the runtime heartbeat and unavailable-agent guidance slice.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
 - `docs/memory/agent-conversation-context-and-tools.md` records the defaults, scope, implementation result, and validation for the conversation context and tool catalog phase.
@@ -44,6 +45,8 @@
 - Source code now includes local CLI Google OAuth login/status/logout, owner-only Google token file handling, and read-only Gmail, Drive, and Docs Tool Registry tools.
 - Source code now includes `local_file_read`, a bounded read-only local file content tool for follow-up reads after `local_search`.
 - Source code now includes Center Server agent registration, heartbeat, `agent_tasks` lifecycle state, claim leases, Center CLI smoke commands, and a one-shot Local Agent worker for `answer_question` tasks.
+- Source code now records a Local Agent runtime heartbeat in SQLite on startup and App Home opens, and Slack App Home displays the runtime as online, stale, or not seen yet.
+- Slack unavailable-agent guidance is centralized as a fixed response formatter, while the current architecture still requires the Local Agent process to be running for Socket Mode events to reach this repo.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
 - Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
@@ -78,6 +81,7 @@
 - Center Server TODO validation passed with focused repository/API handler tests, full `npm run verify` with 18 test files and 90 tests, and local running-server HTTP UAT for health/create/update/list.
 - Search/read/summarize validation passed with focused `localSearch` and `agentCommands` tests, plus full `npm run verify` under Node.js `v22.23.1` with 19 test files and 99 tests.
 - Remote Task Dispatch validation passed with focused `agentTaskRepository`, `centerServer`, and `agentWorker` tests under Node.js `v22.23.1` with 14 tests, full `npm run verify` with 21 test files and 109 tests, CLI smoke for register/create/claim/list against a temporary SQLite DB, and local running-server worker UAT against `http://127.0.0.1:4319`.
+- Local Agent runtime status validation covers heartbeat persistence, App Home online/stale/not-seen status formatting, and fixed unavailable-agent response text.
 - Chrome UAT confirmed the current Chrome profile still blocks direct `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; Computer Use could inspect Finder but returned `cgWindowNotFound` for Chrome.
 - Chrome/Computer Use UAT reached Chrome, but this Chrome profile blocked direct `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; the server was verified independently through local HTTP requests.
 - Quick UAT startup scripts and guide were added; `tests/uatStartScript.test.ts` covers invalid mode and dry-run resume behavior.
@@ -85,6 +89,7 @@
 ## Likely Next Work
 
 - Resolve Chrome profile blocking for direct localhost Center Server page UAT, or use an approved browser profile/settings path for local API pages.
+- Decide whether to move Slack ingress to an always-on Center Server path when automatic Slack replies are required while a user-owned Local Agent is offline.
 - Configure a real Google OAuth client and run local browser login plus Slack DM UAT for Gmail, Drive, and Docs read-only queries.
 - Re-run live Slack UAT for the previously failing `ask` prompts after repeated-tool-call hardening.
 - Expand prompt-injection fixtures beyond the current unknown-tool and malformed-input tests.
