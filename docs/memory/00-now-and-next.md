@@ -29,6 +29,7 @@
 - `docs/repo-goal/10-search-read-summarize.md` now defines and records the implemented workflow for local and Google search, bounded read, summarization, citation, and required token access.
 - `docs/repo-goal/11-remote-task-dispatch.md` now defines and records the implemented first hybrid dispatch slice for Center Server-owned agent tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - `docs/repo-goal/12-local-agent-runtime-status.md` defines the runtime heartbeat and unavailable-agent guidance slice.
+- `docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md` now defines the selected method for Slack-native readable-scope expansion and proactive Local Agent lifecycle notices.
 - `docs/reproducible-demo/` now provides a dedicated repeatable POC demo plan covering local Slack agent operation, Center Server task dispatch, multi-agent comparison, fixture expectations, and evidence capture.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
@@ -37,6 +38,7 @@
 - `docs/memory/central-server-todo-planning.md` records the decision and implementation result for introducing Central Server through a TODO-only HTTP API first, while keeping Slack ingress in the Local Agent.
 - `docs/memory/search-read-summarize-planning.md` records the search/read/summarize implementation result and minimum OpenAI, Google, and Slack token access.
 - `docs/memory/remote-task-dispatch-planning.md` records the implemented first step for durable remote task dispatch without moving local files or credentials into Center Server.
+- `docs/memory/dynamic-readable-scope-and-runtime-notices.md` records the decision to keep env folders as bootstrap defaults, store runtime folder grants in SQLite, and send best-effort lifecycle notices to a configured or remembered Slack target.
 - `projects/local-server`, `projects/center-server`, and `projects/center-server-db` document the project boundaries.
 - Source code now includes `src/center-db`, `src/center-server`, and `src/cli/centerCli.ts` for central TODO persistence, HTTP API, and local smoke commands.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
@@ -87,6 +89,7 @@
 - Chrome/Computer Use UAT reached Chrome, but this Chrome profile blocked direct `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; the server was verified independently through local HTTP requests.
 - Quick UAT startup scripts and guide were added; `tests/uatStartScript.test.ts` covers invalid mode and dry-run resume behavior.
 - Reproducible demo planning was added as documentation only; no application logic changed.
+- Dynamic readable-scope and runtime notice planning was added as documentation only; no application logic changed in this step.
 
 ## Likely Next Work
 
@@ -99,3 +102,4 @@
 - Keep Phase 5 local index cache deferred until v0 Slack-visible UAT and daemon/runbook gaps are closed.
 - Resolve Chrome profile localhost blocking if browser-visible Center Server UAT remains required, then decide whether to add Slack task creation or a polling loop for Remote Task Dispatch.
 - Add structured agent task result metadata before using the multi-agent comparison demo as a stronger comparable-output claim.
+- Implement `folders list/add/remove`, `status`, `status subscribe`, startup online notices, and graceful-shutdown offline notices according to `docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md`.

@@ -10,6 +10,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `accelerated-local-file-search.md`: Decision to prioritize a local Slack bot file search slice and require a user-run Local Agent process under tighter time constraints.
 - `central-server-todo-planning.md`: Planned Local Server, Center Server, and Center Server DB split with central TODO management as the first shared capability.
 - `doc-test-fixtures.md`: Synthetic local-search fixture corpus for poetry, literature, markets, news-style briefs, conversations, and task lists.
+- `dynamic-readable-scope-and-runtime-notices.md`: Selected design for Slack-native folder scope expansion and proactive Local Agent online/offline notices.
 - `future-hybrid-routing.md`: Future Central Server routing decision for multiple Local Agents while keeping the current POC single-active-agent.
 - `google-workspace-oauth.md`: Local Google OAuth onboarding, read-only Gmail/Drive/Docs Tool Registry tools, and token/audit safety decisions.
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.

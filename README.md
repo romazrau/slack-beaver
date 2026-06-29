@@ -180,5 +180,6 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - [Search, Read, And Summarize Workflow](docs/repo-goal/10-search-read-summarize.md): implemented local and Google search/read/summarize workflow plus required token access.
 - [Remote Task Dispatch And Agent Optimization](docs/repo-goal/11-remote-task-dispatch.md): implemented first hybrid dispatch slice for Center Server-owned tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - [Local Agent Runtime Status](docs/repo-goal/12-local-agent-runtime-status.md): runtime heartbeat status in Slack App Home and fixed unavailable-agent guidance.
+- [Dynamic Readable Scope And Runtime Notices](docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md): selected plan for Slack-native folder scope expansion plus Local Agent online/offline notices.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.
