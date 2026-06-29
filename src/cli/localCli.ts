@@ -1,9 +1,20 @@
 import "dotenv/config";
 import { stdin as input, stdout as output } from "node:process";
 import { pathToFileURL } from "node:url";
+import {
+  createConfiguredOpenAiModelListClient,
+  listOpenAiModelSelection,
+  OPENAI_MODEL_SETTING_KEY,
+  setOpenAiModel,
+  type OpenAiModelListClient
+} from "../agent/openAiModels.js";
 import { loadConfig } from "../config/config.js";
 import { LocalMemoryStore } from "../memory/localMemory.js";
-import { formatResetCompletedGuidance, formatResetRefusalGuidance } from "../slack/onboardingCopy.js";
+import {
+  formatOpenAiSetupGuidance,
+  formatResetCompletedGuidance,
+  formatResetRefusalGuidance
+} from "../slack/onboardingCopy.js";
 import { validateAllowedFolderInput } from "../setup/folderSetup.js";
 import { saveOpenAiToken } from "../setup/secretSetup.js";
 
@@ -12,7 +23,14 @@ type CliResult = {
   message: string;
 };
 
-export async function runLocalCli(argv: string[] = process.argv.slice(2)): Promise<CliResult> {
+type LocalCliOptions = {
+  openAiModelListClient?: OpenAiModelListClient;
+};
+
+export async function runLocalCli(
+  argv: string[] = process.argv.slice(2),
+  options: LocalCliOptions = {}
+): Promise<CliResult> {
   const [command, ...rest] = argv;
   const config = loadConfig(process.env, { requireSlackTokens: false });
   const store = new LocalMemoryStore(config.localMemory.dbPath);
@@ -63,6 +81,25 @@ export async function runLocalCli(argv: string[] = process.argv.slice(2)): Promi
       return { code: 0, message: "OpenAI token saved locally." };
     }
 
+    if (command === "models:list") {
+      return await listModels(config, store, options);
+    }
+
+    if (command === "models:current") {
+      return {
+        code: 0,
+        message: `Active OpenAI model: ${store.getSetting(OPENAI_MODEL_SETTING_KEY)?.value.trim() || config.ai.openAiModel}`
+      };
+    }
+
+    if (command === "models:set") {
+      const modelId = rest.join(" ").trim();
+      if (!modelId) {
+        return { code: 1, message: "Usage: npm run agent:models:set -- <model-id>" };
+      }
+      return await setModel(modelId, config, store, options);
+    }
+
     if (command === "memory:reset") {
       return resetMemory(rest, store);
     }
@@ -70,11 +107,84 @@ export async function runLocalCli(argv: string[] = process.argv.slice(2)): Promi
     return {
       code: 1,
       message:
-        "Usage: npm run agent:folders:add -- /absolute/path | npm run agent:folders:list | npm run agent:folders:remove -- /absolute/path | npm run agent:secrets:set-openai | npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes"
+        "Usage: npm run agent:folders:add -- /absolute/path | npm run agent:folders:list | npm run agent:folders:remove -- /absolute/path | npm run agent:secrets:set-openai | npm run agent:models:list | npm run agent:models:current | npm run agent:models:set -- <model-id> | npm run agent:memory:reset -- --confirm RESET_LOCAL_MEMORY --yes"
     };
   } finally {
     store.close();
   }
+}
+
+async function listModels(
+  config: ReturnType<typeof loadConfig>,
+  store: LocalMemoryStore,
+  options: LocalCliOptions
+): Promise<CliResult> {
+  try {
+    const client = options.openAiModelListClient ?? (await createConfiguredOpenAiModelListClient(config));
+    const selection = await listOpenAiModelSelection({ config, memoryStore: store, client });
+    const lines =
+      selection.models.length === 0
+        ? ["No selectable Responses text models are available to this API key."]
+        : selection.models.map((model) => `${model === selection.activeModel ? "*" : " "}\t${model}`);
+
+    if (!selection.activeModelAvailable) {
+      lines.push(`Warning: active model is not available to this API key: ${selection.activeModel}`);
+    }
+
+    return {
+      code: 0,
+      message: lines.join("\n")
+    };
+  } catch (error) {
+    if (isOpenAiTokenSetupError(error)) {
+      return {
+        code: 1,
+        message: formatOpenAiSetupGuidance()
+      };
+    }
+
+    return {
+      code: 1,
+      message: `Unable to list OpenAI models. Confirm the API key has List models: Read. ${formatErrorMessage(error)}`
+    };
+  }
+}
+
+async function setModel(
+  modelId: string,
+  config: ReturnType<typeof loadConfig>,
+  store: LocalMemoryStore,
+  options: LocalCliOptions
+): Promise<CliResult> {
+  try {
+    const client = options.openAiModelListClient ?? (await createConfiguredOpenAiModelListClient(config));
+    const selectedModel = await setOpenAiModel({ modelId, memoryStore: store, client });
+    return {
+      code: 0,
+      message: `OpenAI model saved: ${selectedModel}`
+    };
+  } catch (error) {
+    if (isOpenAiTokenSetupError(error)) {
+      return {
+        code: 1,
+        message: formatOpenAiSetupGuidance()
+      };
+    }
+
+    return {
+      code: 1,
+      message: formatErrorMessage(error)
+    };
+  }
+}
+
+function isOpenAiTokenSetupError(error: unknown): boolean {
+  const message = formatErrorMessage(error);
+  return message.includes("OpenAI token") || message.includes("AI agent token");
+}
+
+function formatErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown OpenAI model error";
 }
 
 function resetMemory(args: string[], store: LocalMemoryStore): CliResult {

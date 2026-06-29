@@ -16,6 +16,12 @@ export type ProviderConfig = {
   updatedAt: string;
 };
 
+export type Setting = {
+  key: string;
+  value: string;
+  updatedAt: string;
+};
+
 export type ToolCallAudit = {
   source: string;
   toolName: string;
@@ -167,6 +173,35 @@ export class LocalMemoryStore {
       tokenConfigured: row.tokenConfigured === 1,
       updatedAt: row.updatedAt
     };
+  }
+
+  setSetting(key: string, value: string): Setting {
+    const now = new Date().toISOString();
+    this.db
+      .prepare(
+        `insert into settings (key, value, updated_at)
+         values (?, ?, ?)
+         on conflict(key) do update set
+           value = excluded.value,
+           updated_at = excluded.updated_at`
+      )
+      .run(key, value, now);
+
+    return {
+      key,
+      value,
+      updatedAt: now
+    };
+  }
+
+  getSetting(key: string): Setting | undefined {
+    return this.db
+      .prepare(
+        `select key, value, updated_at as updatedAt
+         from settings
+         where key = ?`
+      )
+      .get(key) as Setting | undefined;
   }
 
   recordToolCall(entry: ToolCallAudit): void {

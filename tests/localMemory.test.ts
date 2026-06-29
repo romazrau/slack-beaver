@@ -48,6 +48,20 @@ describe("LocalMemoryStore", () => {
     store.close();
   });
 
+  it("stores settings without adding new schema tables", () => {
+    const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
+
+    store.setSetting("openai.model", "gpt-5.5");
+    store.setSetting("openai.model", "gpt-5.4-mini");
+
+    expect(store.getSetting("openai.model")).toMatchObject({
+      key: "openai.model",
+      value: "gpt-5.4-mini"
+    });
+
+    store.close();
+  });
+
   it("stores conversation turns and summary by Slack conversation key", () => {
     const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
 
@@ -93,6 +107,7 @@ describe("LocalMemoryStore", () => {
     const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
 
     store.upsertAllowedFolder("/tmp/a");
+    store.setSetting("openai.model", "gpt-5.5");
     store.setProviderTokenConfigured("openai", true);
     store.recordToolCall({
       source: "app_home_message",
@@ -110,12 +125,14 @@ describe("LocalMemoryStore", () => {
 
     expect(store.resetAll()).toMatchObject({
       allowedFolders: 1,
+      settings: 1,
       conversations: 1,
       toolCalls: 1,
       providerConfig: 1
     });
     expect(store.listAllowedFolders()).toEqual([]);
     expect(store.listConversationTurns("U1", "D1")).toEqual([]);
+    expect(store.getSetting("openai.model")).toBeUndefined();
     expect(store.getProviderConfig("openai")).toBeUndefined();
 
     store.close();

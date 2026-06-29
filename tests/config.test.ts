@@ -21,7 +21,7 @@ describe("loadConfig", () => {
     expect(config.localFiles.maxResults).toBe(7);
     expect(config.localMemory.enabled).toBe(false);
     expect(config.ai).toEqual({
-      openAiModel: "gpt-4.1-mini",
+      openAiModel: "gpt-5.5",
       maxToolTurns: 2,
       maxConversationFullTurns: 8,
       conversationRecentTurnsAfterSummary: 4

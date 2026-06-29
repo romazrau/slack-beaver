@@ -21,6 +21,7 @@
 - `docs/repo-goal/03-local-memory-and-ai-agent.md` now records the implemented Local Memory and OpenAI token safety slice.
 - `docs/repo-goal/04-openai-agent-runner.md` now defines the next phase for a guarded OpenAI-backed `ask <question>` flow.
 - `docs/repo-goal/05-agent-conversation-context-and-tools.md` now defines and tracks the App DM natural conversation mode, agent-readable tool catalog, and 8-turn context summarization policy.
+- `docs/repo-goal/07-openai-model-selection.md` defines local CLI OpenAI model discovery and switching acceptance criteria.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
 - `docs/memory/agent-conversation-context-and-tools.md` records the defaults, scope, implementation result, and validation for the conversation context and tool catalog phase.
@@ -28,6 +29,7 @@
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
 - Source code now includes a guarded OpenAI-backed `ask <question>` runner that can only use validated Tool Registry `local_search` calls.
 - Source code now includes App DM natural conversation, persisted conversation turns, overflow summarization, summary-plus-recent context retention, and a Tool Registry-backed agent-readable tool catalog.
+- Source code now includes local CLI OpenAI model discovery and switching, with `gpt-5.5` as the default model and selected model state stored in SQLite settings.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
 - Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
@@ -53,6 +55,7 @@
 - App DM conversation context validation covers natural conversation routing, no-folder conversation, persisted turns, context separation, 8-turn retention defaults, overflow summarization, summary-plus-recent context, no-tool summarizer calls, and Tool Registry catalog metadata. Live Slack/OpenAI UAT remains pending.
 - VS Code terminal running Node.js `v22.23.1` successfully rebuilt `better-sqlite3` after a Node 20/22 native ABI mismatch; Node 22 smoke testing loaded `better-sqlite3` with `NODE_MODULE_VERSION 127`, and `npm run verify` passed.
 - Agent token onboarding validation passed with focused App Home / command / local CLI / Node preflight tests, Node 24 failure-path smoke testing, Node 22 temporary-path CLI smoke testing for `npm run agent:secrets:set-openai`, Chrome live App Home and Messages verification, and the full `npm run verify` gate under Node.js `v22.23.1`.
+- OpenAI model selection automated validation covers selectable Responses text model filtering, CLI current/list/set behavior, invalid model rejection, SQLite reset behavior, and runtime model precedence.
 
 ## Likely Next Work
 

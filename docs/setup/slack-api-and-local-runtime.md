@@ -46,6 +46,7 @@ Current internal/test app reference:
 - Do not paste, log, commit, or document token values.
 - Regenerate tokens from Slack app settings if token exposure is suspected.
 - OpenAI API tokens must be configured through the local CLI, not through Slack.
+- OpenAI API keys need `List models: Read` for local model discovery and switching, plus `Responses: Write` for the selected model.
 
 Secret-safe `.env` presence check:
 
@@ -73,7 +74,7 @@ MAX_SEARCH_RESULTS=5
 LOCAL_MEMORY_ENABLED=true
 LOCAL_MEMORY_DB_PATH=./data/slack-beaver.sqlite
 OPENAI_TOKEN_PATH=./tokens/openai.key
-OPENAI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-5.5
 MAX_AGENT_TOOL_TURNS=2
 MAX_CONVERSATION_FULL_TURNS=8
 CONVERSATION_RECENT_TURNS_AFTER_SUMMARY=4
@@ -157,6 +158,16 @@ npm run agent:secrets:set-openai
 This command prompts locally for the OpenAI API key, saves it to `OPENAI_TOKEN_PATH`, and records provider setup metadata in SQLite. Do not paste API keys or paid tokens into Slack; Slack only shows setup guidance.
 
 The local setup command does not require Slack bot or app tokens. Full Slack tokens are still required when starting the Socket Mode Local Agent.
+
+OpenAI model management:
+
+```sh
+npm run agent:models:current
+npm run agent:models:list
+npm run agent:models:set -- gpt-5.5
+```
+
+`agent:models:list` uses the saved API key to call OpenAI's model list endpoint and shows selectable Responses text models. `agent:models:set` only saves compatible models visible to that key, excluding specialized image, audio, realtime, transcription, and TTS models. The selected model is stored in local SQLite memory under `openai.model`; if no model is selected, the runtime uses `OPENAI_MODEL`, then the default `gpt-5.5`.
 
 Reset local memory with double confirmation:
 

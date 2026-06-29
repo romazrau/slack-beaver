@@ -11,6 +11,7 @@ import {
   type AgentToolCallResult
 } from "./toolRegistry.js";
 import { createOpenAiResponsesModelClient } from "./openAiResponsesClient.js";
+import { resolveOpenAiModel } from "./openAiModels.js";
 
 export type AgentModelInput = {
   question: string;
@@ -72,7 +73,7 @@ export async function runAgentQuestion(input: RunAgentQuestionInput): Promise<{
 
   let modelClient: AgentModelClient;
   try {
-    modelClient = input.modelClient ?? (await createConfiguredOpenAiClient(input.config));
+    modelClient = input.modelClient ?? (await createConfiguredOpenAiClient(input.config, input.memoryStore));
   } catch (error) {
     if (error instanceof OpenAiSetupRequiredError) {
       return { answer: formatOpenAiSetupGuidance(), toolCallCount: 0 };
@@ -102,7 +103,7 @@ export async function runAgentConversation(input: RunAgentConversationInput): Pr
 
   let modelClient: AgentModelClient;
   try {
-    modelClient = input.modelClient ?? (await createConfiguredOpenAiClient(input.config));
+    modelClient = input.modelClient ?? (await createConfiguredOpenAiClient(input.config, input.memoryStore));
   } catch (error) {
     if (error instanceof OpenAiSetupRequiredError) {
       return { answer: formatOpenAiSetupGuidance(), toolCallCount: 0 };
@@ -240,7 +241,8 @@ async function summarizeOverflowingConversation(input: RunAgentConversationInput
 
   const summary = turns.filter((turn) => turn.kind === "summary").at(-1);
   const turnsToSummarize = fullTurns.slice(0, input.config.ai.maxConversationFullTurns);
-  const summarizerClient = input.summarizerClient ?? input.modelClient ?? (await createConfiguredOpenAiClient(input.config));
+  const summarizerClient =
+    input.summarizerClient ?? input.modelClient ?? (await createConfiguredOpenAiClient(input.config, input.memoryStore));
   const summaryContext = [
     ...(summary ? [{ role: "summary" as const, content: summary.assistantReply }] : []),
     ...turnsToSummarize.flatMap((turn): AgentConversationContextItem[] => [
@@ -272,12 +274,15 @@ async function summarizeOverflowingConversation(input: RunAgentConversationInput
   input.memoryStore.deleteConversationTurns(turnsToSummarize.map((turn) => turn.id));
 }
 
-async function createConfiguredOpenAiClient(config: AppConfig): Promise<AgentModelClient> {
+async function createConfiguredOpenAiClient(
+  config: AppConfig,
+  memoryStore?: LocalMemoryStore
+): Promise<AgentModelClient> {
   try {
     const token = await loadOpenAiToken(config.localMemory.openAiTokenPath);
     return createOpenAiResponsesModelClient({
       apiKey: token,
-      model: config.ai.openAiModel
+      model: resolveOpenAiModel(config, memoryStore)
     });
   } catch {
     throw new OpenAiSetupRequiredError();

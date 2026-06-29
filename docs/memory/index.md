@@ -13,6 +13,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.
 - `node-runtime-and-native-sqlite.md`: Node.js 22 runtime standardization and `better-sqlite3` native ABI rebuild guidance.
 - `openai-agent-runner.md`: Guarded OpenAI-backed `ask <question>` runner, strict local-search tool calling, token-file loading, and fake-client tests.
+- `openai-model-selection.md`: Local CLI model discovery and switching, `gpt-5.5` default, and the `List models: Read` key permission decision.
 - `project-structure-cleanup.md`: Source layout cleanup by responsibility and the standard `npm run verify` gate.
 - `readme-documentation-scope.md`: Decision to keep README limited to server startup, current features, and docs links while moving setup details into `docs/setup/`.
 - `repo-initialization.md`: Initial repository documentation and ignore-rule decisions.

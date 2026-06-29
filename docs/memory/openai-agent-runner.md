@@ -11,7 +11,7 @@ the deterministic `find <query>` path.
 ## Implementation
 
 - Added the official `openai` SDK.
-- Added `OPENAI_MODEL` with default `gpt-4.1-mini`.
+- Added `OPENAI_MODEL`; the current default is `gpt-5.5`.
 - Added `MAX_AGENT_TOOL_TURNS` with default `2`.
 - Added `ask <question>` parsing for slash command and App Home Messages tab.
 - Added `AgentModelClient` so automated tests can use fake model clients without
