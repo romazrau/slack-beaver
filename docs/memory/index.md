@@ -17,6 +17,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `openai-agent-runner.md`: Guarded OpenAI-backed `ask <question>` runner, strict local-search tool calling, token-file loading, and fake-client tests.
 - `openai-model-selection.md`: Local CLI model discovery and switching, `gpt-5.5` default, and the `List models: Read` key permission decision.
 - `project-structure-cleanup.md`: Source layout cleanup by responsibility and the standard `npm run verify` gate.
+- `quick-uat-start-guide.md`: Quick manual UAT startup guide covering first startup, resume startup, and reset-state startup.
 - `readme-documentation-scope.md`: Decision to keep README limited to server startup, current features, and docs links while moving setup details into `docs/setup/`.
 - `repo-initialization.md`: Initial repository documentation and ignore-rule decisions.
 - `slack-openai-uat.md`: Live Slack/OpenAI UAT results, repeated tool-call finding, deterministic runner fallback, and fixture-scope note.

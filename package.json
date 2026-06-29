@@ -8,6 +8,9 @@
   },
   "scripts": {
     "check:node": "node scripts/check-node-version.cjs",
+    "uat:first": "node scripts/uat-start.cjs first",
+    "uat:resume": "node scripts/uat-start.cjs resume",
+    "uat:reset": "node scripts/uat-start.cjs reset",
     "predev": "npm run check:node",
     "dev": "tsx src/index.ts",
     "precenter:dev": "npm run check:node",

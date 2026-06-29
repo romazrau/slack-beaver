@@ -8,6 +8,8 @@
 - `docs/repo-goal/02-v0-facts-and-hardening.md` defines the next phase: facts inventory, remaining manual UAT, coverage gap review, demo runbook, and Phase 5 readiness decision.
 - `README.md` is now a compact entry point for starting the Local Agent server, running verification, seeing current features, and navigating deeper docs.
 - `docs/setup/slack-api-and-local-runtime.md` now owns Slack app settings, local `.env` setup, secret handling, local CLI setup commands, and optional `launchctl submit` demo notes.
+- `docs/runbooks/quick-uat-start.md` now provides first-startup, resume-startup, and reset-state startup paths for manual UAT.
+- `npm run uat:first`, `npm run uat:resume`, and `npm run uat:reset` now provide one-line Local Agent UAT startup paths backed by `scripts/uat-start.cjs`.
 - `.gitignore` now protects local dependencies, build outputs, secrets, SQLite runtime files, logs, caches, and local OAuth/token artifacts.
 - Source code includes config validation, guarded direct local search, Slack `/agent find <query>` command handling, Slack App Home / Messages chat handling, and JSONL audit logging.
 - A real Slack app named `Slack Beaver Local Agent` exists in the `For Coding` workspace with Socket Mode enabled and `/agent find <query>` configured.
@@ -69,6 +71,7 @@
 - Fixture-scope UAT found that `.env` `WATCHED_FOLDERS` and SQLite local-memory allowed folders are merged, so pure fixture UAT requires clearing or aligning `.env` watched folders.
 - Center Server TODO validation passed with focused repository/API handler tests, full `npm run verify` with 18 test files and 90 tests, and local running-server HTTP UAT for health/create/update/list.
 - Chrome/Computer Use UAT reached Chrome, but this Chrome profile blocked direct `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; the server was verified independently through local HTTP requests.
+- Quick UAT startup scripts and guide were added; `tests/uatStartScript.test.ts` covers invalid mode and dry-run resume behavior.
 
 ## Likely Next Work
 

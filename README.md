@@ -33,6 +33,14 @@ Start the Local Agent:
 npm run dev
 ```
 
+Quick manual UAT startup:
+
+```sh
+npm run uat:first
+npm run uat:resume
+npm run uat:reset
+```
+
 Start the Center Server TODO API:
 
 ```sh
@@ -139,6 +147,7 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 ## Documentation Index
 
 - [Slack API And Local Runtime Setup](docs/setup/slack-api-and-local-runtime.md): Slack app settings, local `.env`, CLI setup, secret handling, and optional daemon notes.
+- [Quick UAT Start Guide](docs/runbooks/quick-uat-start.md): first startup, resume startup, and reset-state startup paths for manual UAT.
 - [Slack Local File Search v0 Runbook](docs/runbooks/slack-local-file-search-v0.md): repeatable demo, manual UAT, audit inspection, and cleanup checklist.
 - [POC Plan](docs/repo-goal/00-poc.md): product scope, architecture reasoning, phase plan, and acceptance criteria.
 - [Accelerated Local File Search](docs/repo-goal/01-accelerated-local-file-search.md): v0 runtime decision and narrowed local-search phase.
