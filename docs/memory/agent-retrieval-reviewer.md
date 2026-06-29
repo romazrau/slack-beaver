@@ -20,8 +20,8 @@ answer to the user's intent. The failure came from three interacting behaviors:
 
 ## Decision
 
-Plan a retrieval planning and reviewer phase for `ask <question>` and natural
-App DM conversation.
+Implement a retrieval planning and reviewer phase for `ask <question>` and
+natural App DM conversation.
 
 Selected behavior:
 
@@ -42,6 +42,29 @@ Selected behavior:
   implementation should rank or filter results so repo planning documents do
   not dominate content-example requests.
 
+## Implementation Result
+
+The runner now has a `reviewer` model purpose for answers that used read-only
+tool context. The reviewer receives gathered bounded tool outputs and the draft
+answer, has no tools, and returns a structured JSON decision:
+
+- `accept`: send the draft answer.
+- `needs_more_context`: continue the main agent loop with reviewer feedback and
+  allow one additional main-loop window for follow-up search/read work.
+- `ask_user`: return one clarifying question.
+- `reject_insufficient_context`: return an insufficient-context answer instead
+  of raw search matches.
+
+The main instructions now tell the agent to classify retrieval intent, ask first
+for subjective or underspecified selections, derive multiple useful query
+variants for clear requests, and cite used sources.
+
+A deterministic guard catches vague mood-based short-passage requests before
+model/tool use and asks what mood or theme should be used. This specifically
+prevents the previous raw `00-poc.md` fallback for that class of request.
+
+`find <query>` remains deterministic search-only and does not use the reviewer.
+
 ## Tradeoffs
 
 Asking first for subjective requests slows some interactions, but avoids
@@ -56,25 +79,22 @@ to search again or ask the user for more detail.
 Keeping `find <query>` unchanged preserves the project's deterministic search
 surface and avoids surprising users who expect direct search results.
 
-## Implementation Notes For Next Work
+## Validation
 
-- Add a reviewer model purpose and structured reviewer decision type.
-- Keep reviewer decisions internal to the Local Agent process.
-- Do not let the reviewer call tools directly; it should ask the runner to
-  perform more search/read work when needed.
-- Add prompt instructions that clearly distinguish ambiguity handling, query
-  planning, source reading, draft answering, and reviewing.
-- Prevent raw local-search fallback from becoming the final answer for
-  subjective content-selection requests.
-- Add regression coverage for vague short-passage requests that previously
-  matched `00-poc.md`.
-
-## Validation Expectation
-
-Logic changes must include tests for:
+Automated validation now covers:
 
 - Ambiguous subjective request asks one clarifying question before tool use.
 - Clear request searches, reads, and receives reviewer acceptance.
 - Reviewer can request more context without repeated identical tool loops.
 - Reviewer can reject irrelevant search matches instead of returning raw output.
 - `find <query>` remains deterministic search-only.
+
+Validated with:
+
+```sh
+npm test -- tests/agentCommands.test.ts
+npm run typecheck
+```
+
+Live Slack/OpenAI UAT remains useful for prompt quality, especially subjective
+selection follow-ups after the first clarification.

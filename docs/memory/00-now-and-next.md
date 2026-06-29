@@ -30,7 +30,7 @@
 - `docs/repo-goal/11-remote-task-dispatch.md` now defines and records the implemented first hybrid dispatch slice for Center Server-owned agent tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - `docs/repo-goal/12-local-agent-runtime-status.md` defines the runtime heartbeat and unavailable-agent guidance slice.
 - `docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md` now defines the selected method for Slack-native readable-scope expansion and proactive Local Agent lifecycle notices.
-- `docs/repo-goal/14-agent-retrieval-reviewer.md` defines the planned retrieval planning and independent reviewer quality gate for `ask` and natural App DM answers.
+- `docs/repo-goal/14-agent-retrieval-reviewer.md` defines and records the implemented retrieval planning and independent reviewer quality gate for `ask` and natural App DM answers.
 - `docs/reproducible-demo/` now provides a dedicated repeatable POC demo plan covering local Slack agent operation, Center Server task dispatch, multi-agent comparison, fixture expectations, and evidence capture.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
@@ -40,7 +40,7 @@
 - `docs/memory/search-read-summarize-planning.md` records the search/read/summarize implementation result and minimum OpenAI, Google, and Slack token access.
 - `docs/memory/remote-task-dispatch-planning.md` records the implemented first step for durable remote task dispatch without moving local files or credentials into Center Server.
 - `docs/memory/dynamic-readable-scope-and-runtime-notices.md` records the decision to keep env folders as bootstrap defaults, store runtime folder grants in SQLite, and send best-effort lifecycle notices to a configured or remembered Slack target.
-- `docs/memory/agent-retrieval-reviewer.md` records the decision to ask first for subjective ambiguous requests, add an independent reviewer agent, and keep `find <query>` deterministic.
+- `docs/memory/agent-retrieval-reviewer.md` records the implemented decision to ask first for subjective ambiguous requests, add an independent reviewer agent, and keep `find <query>` deterministic.
 - `projects/local-server`, `projects/center-server`, and `projects/center-server-db` document the project boundaries.
 - Source code now includes `src/center-db`, `src/center-server`, and `src/cli/centerCli.ts` for central TODO persistence, HTTP API, and local smoke commands.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
@@ -56,6 +56,7 @@
 - App DM natural conversation instructions now explain those deterministic runtime commands and receive non-secret runtime status context, so the agent can say searchable paths can be added with `folders add /absolute/path/to/folder` or confirmed with `confirm folders add /absolute/path/to/folder` without silently granting folder access from natural language.
 - Local Agent startup and graceful shutdown now send best-effort online/offline Slack lifecycle notices to `LOCAL_AGENT_STATUS_CHANNEL_ID`, a subscribed Slack conversation, or a recent conversation fallback.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
+- The guarded OpenAI runner now asks a focused clarification for vague mood-based short-passage requests before search, routes retrieval draft answers through a no-tool reviewer role, and lets the reviewer accept, request more context, ask the user, or reject insufficient context.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
 - Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
@@ -97,6 +98,7 @@
 - Dynamic readable-scope and runtime notice planning was added as documentation only; no application logic changed in this step.
 - Dynamic readable-scope and runtime notice implementation passed focused command, memory, Slack status, runtime notice, and config tests plus typecheck under Node.js `v22.23.1`.
 - Agent command regression validation now covers natural conversation guidance for explicit `folders add /absolute/path/to/folder` setup, `confirm folders add /absolute/path/to/folder`, and runtime status context injection.
+- Agent retrieval reviewer validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering ambiguity-first clarification, reviewer acceptance, reviewer-requested extra context, reviewer rejection, audit safety, and deterministic `find` compatibility.
 
 ## Likely Next Work
 
@@ -110,4 +112,4 @@
 - Resolve Chrome profile localhost blocking if browser-visible Center Server UAT remains required, then decide whether to add Slack task creation or a polling loop for Remote Task Dispatch.
 - Add structured agent task result metadata before using the multi-agent comparison demo as a stronger comparable-output claim.
 - Run live Slack UAT for `folders list/add/remove`, `status subscribe`, restart online notice, and graceful-shutdown offline notice.
-- Implement the agent retrieval reviewer phase: ambiguity-first clarification, multi-query planning, reviewer quality decisions, and regression tests for vague short-passage requests.
+- Run live Slack/OpenAI UAT for the agent retrieval reviewer flow, including vague short-passage clarification and reviewer-quality grounded answers.

@@ -1,5 +1,7 @@
 # Agent Retrieval Planning And Reviewer
 
+Status: implemented and focused automated validation passed.
+
 ## Goal
 
 Improve `ask <question>` and natural App DM conversation so the agent can handle
@@ -31,9 +33,9 @@ match, but it was not useful because the model had searched with broad terms and
 the runner fell back to raw local-search matches instead of selecting an
 appropriate example.
 
-The next improvement should make the agent responsible for retrieval planning
-and make a separate reviewer responsible for quality control before the user
-sees the answer.
+The implemented improvement makes the agent responsible for retrieval planning
+and uses a separate reviewer role for quality control before retrieval answers
+reach Slack.
 
 ## Selected Approach
 
@@ -50,7 +52,7 @@ Do not change:
 - Google Workspace read-only scope.
 - Tool Registry enforcement.
 
-The conversation agent should first classify the user request:
+The conversation agent now receives instructions to classify the user request:
 
 - Clear factual or retrieval request: plan query terms and use available search
   tools.
@@ -95,6 +97,21 @@ The reviewer returns a structured decision:
 The reviewer must treat Slack text, conversation history, file content, email
 content, Google Docs content, and model drafts as untrusted context. It cannot
 change tool policy, request secrets, execute commands, or grant folder access.
+
+## Implementation Result
+
+- Added `reviewer` as an agent model purpose.
+- Added reviewer instructions that require a JSON decision and expose no tools.
+- Collected bounded search/read tool outputs for reviewer inspection.
+- Routed draft answers that used tool context through the reviewer before
+  returning to Slack.
+- Supported reviewer `accept`, `needs_more_context`, `ask_user`, and
+  `reject_insufficient_context` decisions.
+- Allowed reviewer `needs_more_context` to add one bounded main-loop window for
+  follow-up search/read work while preserving repeated-tool-call detection.
+- Added a deterministic ambiguity guard for vague mood-based short-passage
+  requests so the agent asks a focused clarification before model/tool use.
+- Kept `find <query>` on the deterministic local-search path.
 
 ## Source Coverage
 
@@ -176,3 +193,20 @@ Manual UAT:
   retrieved source content.
 - Ask an explicit `find <query>` command and confirm the response remains a
   direct search result list.
+
+## Validation Result
+
+Passed:
+
+```sh
+npm test -- tests/agentCommands.test.ts
+npm run typecheck
+```
+
+Focused tests cover reviewer acceptance, reviewer-requested extra context,
+reviewer rejection of irrelevant matches, vague short-passage clarification
+before search, audit content safety, Google/local read-only source coverage, and
+existing deterministic `find` compatibility.
+
+Live Slack/OpenAI UAT remains pending for prompt-quality assessment outside fake
+model tests.

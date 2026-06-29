@@ -48,6 +48,14 @@ function buildConfig(): AppConfig {
   };
 }
 
+function reviewerAcceptResponse() {
+  return {
+    responseId: "review_1",
+    finalAnswer: JSON.stringify({ decision: "accept" }),
+    toolCalls: []
+  };
+}
+
 describe("runAgentTextCommand", () => {
   it("runs find once and writes source to audit log", async () => {
     await fs.writeFile(path.join(tempDir, "notes.md"), "Socket Mode setup", "utf8");
@@ -476,6 +484,12 @@ describe("runAgentTextCommand", () => {
 
     const modelClient: AgentModelClient = {
       async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          expect(input.tools).toEqual([]);
+          expect(input.toolOutputs[0]?.output).toContain("Migration");
+          return reviewerAcceptResponse();
+        }
+
         if (input.toolOutputs.length === 0) {
           return {
             responseId: "resp_1",
@@ -553,6 +567,12 @@ describe("runAgentTextCommand", () => {
     const modelClient: AgentModelClient = {
       async createResponse(input) {
         modelCallCount += 1;
+        if (input.purpose === "reviewer") {
+          expect(input.tools).toEqual([]);
+          expect(input.toolOutputs.some((output) => output.name === "local_file_read")).toBe(true);
+          return reviewerAcceptResponse();
+        }
+
         if (modelCallCount === 1) {
           expect(input.instructions).toContain("read only the top one to three relevant sources");
           return {
@@ -601,7 +621,7 @@ describe("runAgentTextCommand", () => {
       modelClient
     });
 
-    expect(modelCallCount).toBe(3);
+    expect(modelCallCount).toBe(4);
     expect(response).toContain("confirm Google OAuth");
     const auditLine = await fs.readFile(config.auditLogPath, "utf8");
     const parsed = JSON.parse(auditLine.trim());
@@ -628,6 +648,12 @@ describe("runAgentTextCommand", () => {
     const modelClient: AgentModelClient = {
       async createResponse(input) {
         modelCallCount += 1;
+        if (input.purpose === "reviewer") {
+          expect(input.tools).toEqual([]);
+          expect(input.toolOutputs.some((output) => output.name === "gmail_read_message")).toBe(true);
+          return reviewerAcceptResponse();
+        }
+
         if (modelCallCount === 1) {
           return {
             responseId: "resp_1",
@@ -702,7 +728,7 @@ describe("runAgentTextCommand", () => {
       }
     });
 
-    expect(modelCallCount).toBe(3);
+    expect(modelCallCount).toBe(4);
     expect(response).toContain("readiness review");
     const auditLine = await fs.readFile(config.auditLogPath, "utf8");
     expect(auditLine).not.toContain("private launch body detail");
@@ -723,6 +749,12 @@ describe("runAgentTextCommand", () => {
     const modelClient: AgentModelClient = {
       async createResponse(input) {
         modelCallCount += 1;
+        if (input.purpose === "reviewer") {
+          expect(input.tools).toEqual([]);
+          expect(input.toolOutputs.some((output) => output.name === "google_doc_read")).toBe(true);
+          return reviewerAcceptResponse();
+        }
+
         if (modelCallCount === 1) {
           return {
             responseId: "resp_1",
@@ -792,7 +824,7 @@ describe("runAgentTextCommand", () => {
       }
     });
 
-    expect(modelCallCount).toBe(3);
+    expect(modelCallCount).toBe(4);
     expect(response).toContain("onboarding is the priority");
     const auditLine = await fs.readFile(config.auditLogPath, "utf8");
     expect(auditLine).not.toContain("private doc detail");
@@ -808,6 +840,12 @@ describe("runAgentTextCommand", () => {
 
     const modelClient: AgentModelClient = {
       async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          expect(input.tools).toEqual([]);
+          expect(input.toolOutputs[0]?.output).toContain("notes.md");
+          return reviewerAcceptResponse();
+        }
+
         if (input.toolOutputs.length === 0) {
           return {
             responseId: "resp_1",
@@ -850,6 +888,249 @@ describe("runAgentTextCommand", () => {
       source: "app_home_message"
     });
     expect(auditLine).not.toContain("Deployment checklist says test first");
+  });
+
+  it("asks one clarification for vague subjective short-passage requests before searching", async () => {
+    await fs.writeFile(path.join(tempDir, "00-poc.md"), "POC planning note that should not be returned raw.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let modelCalled = false;
+
+    const modelClient: AgentModelClient = {
+      async createResponse() {
+        modelCalled = true;
+        return {
+          responseId: "resp_1",
+          finalAnswer: "This should not be used.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask find a short passage that fits today's mood",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(modelCalled).toBe(false);
+    expect(response).toContain("What kind of mood or theme");
+    expect(response).not.toContain("00-poc.md");
+    const auditLine = await fs.readFile(config.auditLogPath, "utf8");
+    const parsed = JSON.parse(auditLine.trim());
+    expect(parsed).toMatchObject({
+      query: "find a short passage that fits today's mood",
+      resultCount: 0,
+      status: "success"
+    });
+  });
+
+  it("lets the reviewer request more context before accepting an answer", async () => {
+    await fs.writeFile(path.join(tempDir, "notes.md"), "Rollout owner is Mira.", "utf8");
+    await fs.writeFile(path.join(tempDir, "details.md"), "Rollout due date is Friday.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+    let reviewerCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          reviewerCallCount += 1;
+          expect(input.tools).toEqual([]);
+          if (reviewerCallCount === 1) {
+            expect(input.toolOutputs.some((output) => output.output.includes("notes.md"))).toBe(true);
+            return {
+              responseId: "review_1",
+              finalAnswer: JSON.stringify({
+                decision: "needs_more_context",
+                message: "Search for the rollout due date."
+              }),
+              toolCalls: []
+            };
+          }
+
+          expect(input.toolOutputs.some((output) => output.output.includes("details.md"))).toBe(true);
+          return reviewerAcceptResponse();
+        }
+
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "local_search",
+                input: { query: "Rollout owner" }
+              }
+            ]
+          };
+        }
+
+        if (mainCallCount === 2) {
+          expect(input.toolOutputs[0]?.output).toContain("notes.md");
+          return {
+            responseId: "resp_2",
+            finalAnswer: "The rollout owner is Mira. Source: notes.md.",
+            toolCalls: []
+          };
+        }
+
+        if (mainCallCount === 3) {
+          expect(input.instructions).toContain("Search for the rollout due date");
+          return {
+            responseId: "resp_3",
+            toolCalls: [
+              {
+                id: "call_2",
+                name: "local_search",
+                input: { query: "Rollout due date" }
+              }
+            ]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.output).toContain("details.md");
+        return {
+          responseId: "resp_4",
+          finalAnswer: "The rollout owner is Mira and the due date is Friday. Sources: notes.md, details.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask What are the rollout details?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(mainCallCount).toBe(4);
+    expect(reviewerCallCount).toBe(2);
+    expect(response).toContain("Friday");
+  });
+
+  it("returns insufficient-context guidance when the reviewer rejects irrelevant matches", async () => {
+    await fs.writeFile(path.join(tempDir, "00-poc.md"), "Broad planning result unrelated to the requested passage.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          return {
+            responseId: "review_1",
+            finalAnswer: JSON.stringify({
+              decision: "reject_insufficient_context",
+              message: "The configured context is insufficient for a grounded answer."
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.toolOutputs.length === 0) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "local_search",
+                input: { query: "planning result" }
+              }
+            ]
+          };
+        }
+
+        return {
+          responseId: "resp_2",
+          finalAnswer: "Here are raw matches from 00-poc.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask Which passage supports the launch claim?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("configured context is insufficient");
+    expect(response).not.toContain("00-poc.md");
+  });
+
+  it("returns one focused question when the reviewer asks the user", async () => {
+    await fs.writeFile(path.join(tempDir, "notes.md"), "Several candidate launch excerpts exist.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          expect(input.tools).toEqual([]);
+          return {
+            responseId: "review_1",
+            finalAnswer: JSON.stringify({
+              decision: "ask_user",
+              message: "Should I prioritize customer impact or engineering risk?"
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.toolOutputs.length === 0) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "local_search",
+                input: { query: "launch excerpts" }
+              }
+            ]
+          };
+        }
+
+        return {
+          responseId: "resp_2",
+          finalAnswer: "I found several possible launch excerpts.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask Pick the best launch excerpt",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toBe("Should I prioritize customer impact or engineering risk?");
   });
 
   it("falls back to prior local_search output when the model repeats the same tool call", async () => {
@@ -1172,6 +1453,12 @@ describe("runAgentTextCommand", () => {
 
     const modelClient: AgentModelClient = {
       async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          expect(input.tools).toEqual([]);
+          expect(input.toolOutputs[0]?.output).toContain("commands.md");
+          return reviewerAcceptResponse();
+        }
+
         if (input.toolOutputs.length === 0) {
           return {
             responseId: "resp_1",

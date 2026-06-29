@@ -6,7 +6,7 @@ This directory records project decisions, implementation notes, progress, and ne
 
 - `00-now-and-next.md`: Current project state, validation status, and active next phase.
 - `agent-conversation-context-and-tools.md`: Implemented App DM natural conversation, agent-readable tool catalog, and 8-turn context summarization policy.
-- `agent-retrieval-reviewer.md`: Planned retrieval planning and independent reviewer agent behavior for `ask` and App DM quality control.
+- `agent-retrieval-reviewer.md`: Implemented retrieval planning and independent reviewer agent behavior for `ask` and App DM quality control.
 - `agent-token-onboarding.md`: Improved README, Slack App Home, and chat guidance for local-only AI agent token setup.
 - `accelerated-local-file-search.md`: Decision to prioritize a local Slack bot file search slice and require a user-run Local Agent process under tighter time constraints.
 - `central-server-todo-planning.md`: Planned Local Server, Center Server, and Center Server DB split with central TODO management as the first shared capability.

@@ -175,6 +175,7 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.
 - Guarded OpenAI-backed `ask <question>` flow that can only call registered Tool Registry tools.
 - Read-only local file content tool for bounded follow-up reads after local search.
+- Retrieval answers from `ask <question>` and natural App DM are reviewed before Slack delivery when tool context was used; subjective short-passage requests ask a focused clarification before searching.
 - Repeated model-requested tool calls are stopped and answered from the last bounded tool output when possible.
 - Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
 - Center Server TODO API for creating, listing, fetching, and updating centrally stored TODOs.
@@ -202,6 +203,6 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - [Remote Task Dispatch And Agent Optimization](docs/repo-goal/11-remote-task-dispatch.md): implemented first hybrid dispatch slice for Center Server-owned tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - [Local Agent Runtime Status](docs/repo-goal/12-local-agent-runtime-status.md): runtime heartbeat status in Slack App Home and fixed unavailable-agent guidance.
 - [Dynamic Readable Scope And Runtime Notices](docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md): selected plan for Slack-native folder scope expansion plus Local Agent online/offline notices.
-- [Agent Retrieval Reviewer](docs/repo-goal/14-agent-retrieval-reviewer.md): planned retrieval planning, ambiguity handling, and reviewer quality gate for `ask` and App DM answers.
+- [Agent Retrieval Reviewer](docs/repo-goal/14-agent-retrieval-reviewer.md): implemented ambiguity handling and reviewer quality gate for `ask` and App DM answers.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.
