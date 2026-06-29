@@ -381,6 +381,8 @@ gantt
 
 未來如果要升級為 **Central Server + Multiple Local Agents**，順序應該是：先把 shared task state 與 central audit 做出來，再做 agent registration 與中央 policy，最後才討論共享索引與管理後台。不要本末倒置，一開始就先做 dashboard；那會讓團隊看起來像在做產品外殼，而不是在驗證真正高價值的 workflow。fileciteturn0file0
 
+多人 Local Agent 不屬於目前 POC 開發範圍。當前 POC 應明確視為 single-owner / single-active-agent validation：Local Agent 直接透過 Socket Mode 連 Slack，同一組 Slack credentials 同時間只支援一個 active Local Agent。若未來要支援多個使用者各自在不同電腦啟動 Local Agent，就不應讓每個 Local Agent 都直接持有並使用同一組 Slack app credentials；屆時 Slack bot/app tokens 應集中在 Central Server，由 Central Server 成為唯一 Slack ingress，Local Agents 則作為 user-owned workers 連回 Central Server。Central Server 後續才負責 agent registration、user-to-agent routing、active-agent lease、task dispatch、notification、audit、policy 與 event deduplication。
+
 ### 最終建議
 
 我對這個題目的最終建議如下。
@@ -391,6 +393,7 @@ gantt
 - **不建議在三天內做：** multi-user shared state、central dashboard、任意 CLI、自動修改 Google Docs/Sheets、browser automation、vector DB、local LLM。fileciteturn0file0
 - **建議開發順序：** 先打通 Slack，再做 local files/index，再接 Google read-only，最後補 local task tracker 與 audit log。若任何 optional 功能會影響這條順序，就先砍掉。fileciteturn0file0
 - **升級路徑：** 從第一天開始就以 repository 與 executor interface 寫程式。POC 寫 SQLite 實作，未來換成 central API 實作；Local Agent 保留本機能力，Central Server 只接共享、權限與治理。fileciteturn0file0
+- **多人架構備註：** Central Server 仍是未來階段，不在目前 POC 內開發；但一旦準備導入多人多電腦模式，Slack token ownership 必須移到 Central Server，Local Agent 只能是 user-owned worker，避免多個 Local Agent 直接接 Slack Socket Mode 造成事件競爭與重複回覆。
 
 如果你的目標是對內部團隊回答下面這幾個問題——「這個 POC 值不值得做？」「第一版應該做多小？」「哪些功能最能驗證價值？」「哪些功能風險過高應延後？」「未來如何平滑升級？」——那麼這份結論是明確的：**值得做，而且應該立刻用三天做一個很小但很完整的 Local-first 版本。** 真正該追求的不是功能廣度，而是把一條高價值工作流從頭到尾打通。fileciteturn0file0
 
