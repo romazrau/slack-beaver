@@ -6,13 +6,13 @@ The project is moving from a single Local Agent POC toward a hybrid architecture
 The current Local Agent already owns Slack Socket Mode, local files, local
 credentials, OpenAI, Google OAuth, local memory, and guarded tools.
 
-The next requested capability is a Central Server and Local Server split. The
-Central Server only needs to manage TODOs for now. TODOs must record who created
-them and the primary owner.
+The requested capability is a Central Server and Local Server split. The Central
+Server only needs to manage TODOs for now. TODOs must record who created them
+and the primary owner.
 
 ## Decision
 
-Introduce three project boundaries in the repository:
+Introduced three project boundaries in the repository:
 
 - `local-server`: current Slack Beaver Local Agent.
 - `center-server`: new central HTTP runtime for shared coordination features.
@@ -35,8 +35,8 @@ The first Central Server TODO model should include:
 - Status values: `open`, `in_progress`, `done`, `canceled`.
 - Creation and update timestamps.
 
-The first interface should be a JSON HTTP API plus local CLI smoke commands.
-Slack TODO commands can be added after the API and repository are stable.
+The first interface is a JSON HTTP API plus local CLI smoke commands. Slack TODO
+commands can be added after the API and repository are stable.
 
 ## Tradeoffs
 
@@ -48,15 +48,28 @@ Keeping Local Agent code in place avoids destabilizing the already validated
 Slack/OpenAI/Google path. The project boundary should be documented first, then
 implemented in new `src/center-server` and `src/center-db` modules.
 
+## Implementation
+
+- Added `CenterTaskRepository` with SQLite migration, create/list/get/update,
+  validation, and immutable creator metadata.
+- Added Center Server HTTP runtime with `GET /health`, `GET /tasks`,
+  `GET /tasks/:id`, `POST /tasks`, and `PATCH /tasks/:id`.
+- Added local CLI smoke commands for task list/create/update.
+- Added project READMEs for Local Server, Center Server, and Center Server DB.
+
 ## Validation Plan
 
-- Repository tests for migration, create, list, get, update, validation, and
+- Repository tests cover migration, create, list, get, update, validation, and
   immutable creator fields.
-- API tests for health, create/list/get/update, malformed input, and missing
-  task ids.
-- Full `npm run verify` after implementation.
-- Documentation update in README, project READMEs, repo-goal, memory index, and
-  now/next.
+- API handler tests cover health, create/list/get/update, malformed input, and
+  missing task ids.
+- `npm run typecheck` passed.
+- Focused Center Server tests passed.
+- `npm run verify` passed with 18 test files and 90 tests.
+- Local server UAT passed through direct HTTP requests for health, create,
+  update, and list.
+- Chrome/Computer Use UAT reached Chrome, but this Chrome profile blocked direct
+  `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`.
 
 ## Deferred
 
@@ -65,3 +78,4 @@ implemented in new `src/center-server` and `src/center-db` modules.
 - Task dispatch to Local Agents.
 - Central audit policy.
 - Dashboard or rich Slack TODO UI.
+- Resolving Chrome profile blocking for direct localhost page UAT.

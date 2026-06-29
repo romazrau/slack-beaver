@@ -1,11 +1,10 @@
 # Center Server
 
-Center Server is the planned central HTTP runtime for shared coordination
-features.
+Center Server is the central HTTP runtime for shared coordination features.
 
 ## First Capability
 
-The first capability is TODO management.
+The first implemented capability is TODO management.
 
 TODOs must track:
 
@@ -17,7 +16,7 @@ TODOs must track:
 - `createdAt`
 - `updatedAt`
 
-## Planned API
+## API
 
 ```text
 GET /health
@@ -32,13 +31,21 @@ PATCH /tasks/:id
 `PATCH /tasks/:id` can update `title`, `description`, `status`, and
 `primaryOwner`. `createdBy` and `createdAt` stay immutable.
 
-## Planned Commands
+## Commands
 
 ```sh
 npm run center:dev
 npm run center:tasks:list
 npm run center:tasks:create -- --title "Follow up" --created-by U123 --owner U456
 npm run center:tasks:update -- --id 1 --status done
+```
+
+## Configuration
+
+```env
+CENTER_SERVER_HOST=127.0.0.1
+CENTER_SERVER_PORT=4318
+CENTER_DB_PATH=./data/slack-beaver-center.sqlite
 ```
 
 ## Boundary

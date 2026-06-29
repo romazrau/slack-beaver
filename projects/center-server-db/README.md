@@ -1,8 +1,8 @@
 # Center Server DB
 
-Center Server DB is the planned persistence module for central TODO state.
+Center Server DB is the persistence module for central TODO state.
 
-## First Storage Backend
+## Storage Backend
 
 Use SQLite through the existing `better-sqlite3` dependency.
 
@@ -12,7 +12,7 @@ Default path after implementation:
 CENTER_DB_PATH=./data/slack-beaver-center.sqlite
 ```
 
-## Planned Schema
+## Schema
 
 ```text
 tasks
@@ -35,7 +35,7 @@ Allowed status values:
 
 ## Repository Contract
 
-The first repository should support:
+The repository supports:
 
 - migrate schema
 - create task

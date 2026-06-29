@@ -23,13 +23,14 @@
 - `docs/repo-goal/05-agent-conversation-context-and-tools.md` now defines and tracks the App DM natural conversation mode, agent-readable tool catalog, and 8-turn context summarization policy.
 - `docs/repo-goal/07-openai-model-selection.md` defines local CLI OpenAI model discovery and switching acceptance criteria.
 - `docs/repo-goal/08-google-workspace-oauth.md` defines and records local Google OAuth onboarding plus read-only Gmail, Drive, and Docs agent tools.
-- `docs/repo-goal/09-central-server-todo.md` defines the next hybrid architecture slice: Local Server, Center Server, Center Server DB, and central TODO management.
+- `docs/repo-goal/09-central-server-todo.md` defines and records the implemented hybrid architecture slice: Local Server, Center Server, Center Server DB, and central TODO management.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
 - `docs/memory/agent-conversation-context-and-tools.md` records the defaults, scope, implementation result, and validation for the conversation context and tool catalog phase.
 - `docs/memory/future-hybrid-routing.md` records the future boundary: Central Server owns Slack ingress and Local Agents become user-owned workers when multi-user routing is introduced.
-- `docs/memory/central-server-todo-planning.md` records the decision to introduce Central Server through a TODO-only HTTP API first, while keeping Slack ingress in the Local Agent.
-- `projects/local-server`, `projects/center-server`, and `projects/center-server-db` now document the planned project boundaries before implementation.
+- `docs/memory/central-server-todo-planning.md` records the decision and implementation result for introducing Central Server through a TODO-only HTTP API first, while keeping Slack ingress in the Local Agent.
+- `projects/local-server`, `projects/center-server`, and `projects/center-server-db` document the project boundaries.
+- Source code now includes `src/center-db`, `src/center-server`, and `src/cli/centerCli.ts` for central TODO persistence, HTTP API, and local smoke commands.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
 - Source code now includes a guarded OpenAI-backed `ask <question>` runner that can only use validated Tool Registry `local_search` calls.
 - Source code now includes App DM natural conversation, persisted conversation turns, overflow summarization, summary-plus-recent context retention, and a Tool Registry-backed agent-readable tool catalog.
@@ -66,10 +67,12 @@
 - Live Slack/OpenAI non-Google UAT passed for Local Agent startup, `find`, no-result search, simple `ask`, natural App DM Priya TODO lookup, token-like input refusal, `help`, slash-command `find`, `reset memory` guidance, App Home status, model listing, and audit-log shape.
 - Live Slack/OpenAI UAT found that selected `ask` prompts could repeat equivalent `local_search` calls and fail with `Agent exceeded the maximum tool-call turns`; automated regression coverage now protects the deterministic repeated-tool-call fallback.
 - Fixture-scope UAT found that `.env` `WATCHED_FOLDERS` and SQLite local-memory allowed folders are merged, so pure fixture UAT requires clearing or aligning `.env` watched folders.
+- Center Server TODO validation passed with focused repository/API handler tests, full `npm run verify` with 18 test files and 90 tests, and local running-server HTTP UAT for health/create/update/list.
+- Chrome/Computer Use UAT reached Chrome, but this Chrome profile blocked direct `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; the server was verified independently through local HTTP requests.
 
 ## Likely Next Work
 
-- Implement the Central Server TODO slice with a SQLite-backed center DB module, HTTP API, local CLI smoke commands, tests, and `npm run verify`.
+- Resolve Chrome profile blocking for direct localhost Center Server page UAT, or use an approved browser profile/settings path for local API pages.
 - Configure a real Google OAuth client and run local browser login plus Slack DM UAT for Gmail, Drive, and Docs read-only queries.
 - Re-run live Slack UAT for the previously failing `ask` prompts after repeated-tool-call hardening.
 - Expand prompt-injection fixtures beyond the current unknown-tool and malformed-input tests.

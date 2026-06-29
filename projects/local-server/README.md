@@ -30,3 +30,6 @@ store shared TODO state after Central Server TODO management is implemented.
 
 Central Server integration should be added only through explicit APIs. Local
 Server should not directly read or write the central SQLite file.
+
+The current Center Server TODO slice is available separately through
+`npm run center:dev` and the `npm run center:tasks:*` commands.

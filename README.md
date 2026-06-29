@@ -33,6 +33,12 @@ Start the Local Agent:
 npm run dev
 ```
 
+Start the Center Server TODO API:
+
+```sh
+npm run center:dev
+```
+
 ## Enable AI Answers
 
 `find <query>` works with allowed local folders. `ask <question>` and natural App DM conversation also need an AI agent token configured locally.
@@ -99,15 +105,18 @@ npm run agent:models:set -- gpt-5.5
 npm run agent:google:login
 npm run agent:google:status
 npm run agent:google:logout
+npm run center:tasks:list
+npm run center:tasks:create -- --title "Follow up" --created-by U123 --owner U456
+npm run center:tasks:update -- --id 1 --status done
 ```
 
 ## Project Areas
 
-The repository is moving toward a hybrid Local Server plus Center Server shape:
+The repository now has a hybrid Local Server plus Center Server foundation:
 
 - [Local Server](projects/local-server/README.md): current Slack Socket Mode Local Agent for local files, local credentials, guarded AI tools, and Slack replies.
-- [Center Server](projects/center-server/README.md): planned central HTTP runtime. The first slice is TODO management.
-- [Center Server DB](projects/center-server-db/README.md): planned central TODO persistence module, starting with SQLite.
+- [Center Server](projects/center-server/README.md): central HTTP runtime. The first slice is TODO management.
+- [Center Server DB](projects/center-server-db/README.md): central TODO persistence module, starting with SQLite.
 
 ## Current Features
 
@@ -123,6 +132,7 @@ The repository is moving toward a hybrid Local Server plus Center Server shape:
 - Guarded OpenAI-backed `ask <question>` flow that can only call registered Tool Registry tools.
 - Repeated model-requested tool calls are stopped and answered from the last bounded tool output when possible.
 - Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
+- Center Server TODO API for creating, listing, fetching, and updating centrally stored TODOs.
 - JSONL audit log for successful and failed searchable tool activity.
 - Synthetic local-search fixtures under `doc-test/` for manual validation.
 

@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add the first Central Server slice without moving the existing Local Agent runtime.
+Implement the first Central Server slice without moving the existing Local Agent runtime.
 
 This phase introduces three project boundaries inside the repository:
 
@@ -18,7 +18,7 @@ track who created the item and the primary owner.
 Keep the current Local Agent as the owner of local files, local credentials,
 OpenAI calls, Google OAuth tokens, and Slack Socket Mode for the current POC.
 
-Add Central Server as a separate runtime that owns shared TODO state. Central
+Added Central Server as a separate runtime that owns shared TODO state. Central
 Server should not take Slack bot/app tokens yet, should not route events to Local
 Agents yet, and should not execute local tools.
 
@@ -44,7 +44,7 @@ The first schema should support:
 
 ## Server Interface
 
-The Central Server should expose a small JSON HTTP API:
+The Central Server exposes a small JSON HTTP API:
 
 - `GET /health`: returns server status.
 - `GET /tasks`: lists TODOs, newest updated first.
@@ -62,18 +62,18 @@ Validation rules:
 
 ## Project Layout
 
-Use these documentation and code boundaries:
+Implemented documentation and code boundaries:
 
 - `projects/local-server/README.md`: existing Local Agent responsibilities and
   commands.
 - `projects/center-server/README.md`: Central Server API, env, and run commands.
 - `projects/center-server-db/README.md`: schema, repository contract, and SQLite
   storage notes.
-- `src/center-server/`: HTTP app and server entrypoint.
+- `src/center-server/`: HTTP app, request handler, config, and server entrypoint.
 - `src/center-db/`: TODO repository and migration logic.
 - `src/cli/centerCli.ts`: local smoke commands for TODO create/list/update.
 
-Add npm scripts after implementation:
+Implemented npm scripts:
 
 ```sh
 npm run center:dev
@@ -84,15 +84,27 @@ npm run center:tasks:update -- --id 1 --status done
 
 ## Acceptance Criteria
 
-- Central Server can start locally without Slack tokens.
-- `GET /health` succeeds.
-- A TODO can be created with `title`, `createdBy`, and `primaryOwner`.
-- Created TODOs can be listed and fetched by id.
-- A TODO can be marked `in_progress`, `done`, or `canceled`.
-- Invalid create/update payloads are rejected.
-- Repository tests cover migration, create, list, get, and update behavior.
-- API tests cover happy paths plus `400` and `404` cases.
-- README and memory docs describe the three project boundaries.
+- Central Server can start locally without Slack tokens. Implemented.
+- `GET /health` succeeds. Implemented.
+- A TODO can be created with `title`, `createdBy`, and `primaryOwner`. Implemented.
+- Created TODOs can be listed and fetched by id. Implemented.
+- A TODO can be marked `in_progress`, `done`, or `canceled`. Implemented.
+- Invalid create/update payloads are rejected. Implemented.
+- Repository tests cover migration, create, list, get, and update behavior. Implemented.
+- API handler tests cover happy paths plus validation and `404` cases. Implemented.
+- README and memory docs describe the three project boundaries. Implemented.
+
+## Validation
+
+- `npm run typecheck` passed.
+- `npm test -- tests/centerTaskRepository.test.ts tests/centerServer.test.ts` passed.
+- `npm run verify` passed with 18 test files and 90 tests.
+- Local running server UAT passed for `GET /health`, `POST /tasks`,
+  `PATCH /tasks/:id`, and `GET /tasks` against `http://127.0.0.1:4318`.
+- Chrome/Computer Use UAT reached Chrome and showed that this Chrome profile
+  blocks `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`.
+  The server itself was verified through local HTTP requests while Chrome
+  blocker handling remains a browser-environment follow-up.
 
 ## Deferred
 
@@ -102,3 +114,4 @@ npm run center:tasks:update -- --id 1 --status done
 - Multi-user auth, RBAC, and organization policy.
 - PostgreSQL or a separately deployed database service.
 - Web dashboard.
+- Chrome profile blocker resolution for direct localhost page UAT.
