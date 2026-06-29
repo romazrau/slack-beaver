@@ -50,11 +50,13 @@
 - Source code now includes App DM natural conversation, persisted conversation turns, overflow summarization, summary-plus-recent context retention, and a Tool Registry-backed agent-readable tool catalog.
 - Source code now includes local CLI OpenAI model discovery and switching, with `gpt-5.5` as the default model and selected model state stored in SQLite settings.
 - Source code now includes local CLI Google OAuth login/status/logout, owner-only Google token file handling, and read-only Gmail, Drive, and Docs Tool Registry tools.
+- Local Agent startup now checks Google Workspace connection state on each restart and sends setup guidance through startup logs plus the configured Slack lifecycle notice target when Google Workspace is enabled but not connected.
 - Source code now includes `local_file_read`, a bounded read-only local file content tool for follow-up reads after `local_search`.
 - Source code now includes Center Server agent registration, heartbeat, `agent_tasks` lifecycle state, claim leases, Center CLI smoke commands, and a one-shot Local Agent worker for `answer_question` tasks.
 - Source code now records a Local Agent runtime heartbeat in SQLite on startup and App Home opens, and Slack App Home displays the runtime as online, stale, or not seen yet.
 - Slack unavailable-agent guidance is centralized as a fixed response formatter, while the current architecture still requires the Local Agent process to be running for Socket Mode events to reach this repo.
 - Source code now includes Slack-native `folders list/add/remove`, `status`, and `status subscribe` commands for explicit dynamic readable-scope management.
+- App DM handling now ignores Slack DM message events whose Slack `ts` predates the current Local Agent startup, preventing delayed replies to messages sent while the bot was offline.
 - App DM natural conversation instructions now explain those deterministic runtime commands and receive non-secret runtime status context, so the agent can say searchable paths can be added with `folders add /absolute/path/to/folder` or confirmed with `confirm folders add /absolute/path/to/folder` without silently granting folder access from natural language.
 - Local Agent startup and graceful shutdown now send best-effort online/offline Slack lifecycle notices to `LOCAL_AGENT_STATUS_CHANNEL_ID`, a subscribed Slack conversation, or a recent conversation fallback.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
@@ -90,6 +92,7 @@
 - Agent token onboarding validation passed with focused App Home / command / local CLI / Node preflight tests, Node 24 failure-path smoke testing, Node 22 temporary-path CLI smoke testing for `npm run agent:secrets:set-openai`, Chrome live App Home and Messages verification, and the full `npm run verify` gate under Node.js `v22.23.1`.
 - OpenAI model selection automated validation covers selectable Responses text model filtering, CLI current/list/set behavior, invalid model rejection, SQLite reset behavior, and runtime model precedence.
 - Google Workspace OAuth automated validation covers PKCE generation, OAuth state validation, token-file permission refusal, refresh-token handling, bounded Docs output, conditional Google tool exposure, and audit safety for Gmail search.
+- Google Workspace restart guidance validation covers disabled state, missing OAuth client id, missing token, expired token without refresh token, connected metadata sync, disconnected metadata sync, and typecheck under Node.js `v22.23.1`.
 - Live Slack/OpenAI non-Google UAT passed for Local Agent startup, `find`, no-result search, simple `ask`, natural App DM Priya TODO lookup, token-like input refusal, `help`, slash-command `find`, `reset memory` guidance, App Home status, model listing, and audit-log shape.
 - Live Slack/OpenAI UAT found that selected `ask` prompts could repeat equivalent `local_search` calls and fail with `Agent exceeded the maximum tool-call turns`; automated regression coverage now protects the deterministic repeated-tool-call fallback.
 - Fixture-scope UAT found that `.env` `WATCHED_FOLDERS` and SQLite local-memory allowed folders are merged, so pure fixture UAT requires clearing or aligning `.env` watched folders.
@@ -104,6 +107,7 @@
 - Reproducible demo planning was added as documentation only; no application logic changed.
 - Dynamic readable-scope and runtime notice planning was added as documentation only; no application logic changed in this step.
 - Dynamic readable-scope and runtime notice implementation passed focused command, memory, Slack status, runtime notice, and config tests plus typecheck under Node.js `v22.23.1`.
+- Slack stale offline-message regression coverage now verifies that DM events older than Local Agent startup are ignored, while startup-time, newer, missing, or malformed timestamps are not treated as stale.
 - Agent command regression validation now covers natural conversation guidance for explicit `folders add /absolute/path/to/folder` setup, `confirm folders add /absolute/path/to/folder`, and runtime status context injection.
 - Agent retrieval reviewer validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering ambiguity-first clarification, Chinese clarification follow-up handling, reviewer acceptance, reviewer-requested extra context, reviewer rejection, trace logging, audit safety, and deterministic `find` compatibility.
 - Typed agent workflow and local observability validation passed focused config, plan validation, event log, and agent command tests plus typecheck under Node.js `v22.23.1`.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isDirectUserMessage } from "../src/slack/slackApp.js";
+import { isDirectUserMessage, isMessageBeforeRuntimeStart } from "../src/slack/slackApp.js";
 
 describe("isDirectUserMessage", () => {
   it("accepts direct user messages", () => {
@@ -40,5 +40,48 @@ describe("isDirectUserMessage", () => {
         text: "find Socket"
       })
     ).toBe(false);
+  });
+});
+
+describe("isMessageBeforeRuntimeStart", () => {
+  it("identifies Slack messages sent before the Local Agent runtime started", () => {
+    const runtimeStartedAt = new Date("2026-06-29T14:31:43.000Z");
+
+    expect(
+      isMessageBeforeRuntimeStart(
+        {
+          ts: "1782743280.123456"
+        },
+        runtimeStartedAt
+      )
+    ).toBe(true);
+  });
+
+  it("allows messages sent at or after Local Agent startup", () => {
+    const runtimeStartedAt = new Date("2026-06-29T14:31:43.000Z");
+
+    expect(
+      isMessageBeforeRuntimeStart(
+        {
+          ts: "1782743503.000000"
+        },
+        runtimeStartedAt
+      )
+    ).toBe(false);
+    expect(
+      isMessageBeforeRuntimeStart(
+        {
+          ts: "1782743503.000001"
+        },
+        runtimeStartedAt
+      )
+    ).toBe(false);
+  });
+
+  it("does not reject messages with missing or malformed Slack timestamps", () => {
+    const runtimeStartedAt = new Date("2026-06-29T14:31:43.000Z");
+
+    expect(isMessageBeforeRuntimeStart({}, runtimeStartedAt)).toBe(false);
+    expect(isMessageBeforeRuntimeStart({ ts: "not-a-slack-ts" }, runtimeStartedAt)).toBe(false);
   });
 });

@@ -57,6 +57,10 @@ The shutdown notice can only be best-effort. Graceful `SIGINT` and `SIGTERM`
 can send an offline message; crashes, `kill -9`, host sleep, network loss, or
 Slack API failure can prevent delivery.
 
+Slack Socket Mode may deliver queued DM message events after the Local Agent
+reconnects. Those messages are not safe to process as current user intent when
+their Slack timestamp predates the current runtime startup.
+
 ## Implementation Notes For Next Work
 
 - Extend command parsing without routing folder/status commands through OpenAI.
@@ -110,6 +114,10 @@ Implemented the selected approach.
   folder paths and Slack notice target channel IDs, are JSON-stringified before
   prompt insertion so filesystem/control characters cannot reshape the prompt
   structure.
+- App DM handling now ignores direct-message events whose Slack `ts` is older
+  than the current Local Agent startup time. This prevents the bot from
+  replying later to messages sent while it was offline; malformed or missing
+  timestamps are not rejected because they do not prove staleness.
 
 Validation passed under Node.js `v22.23.1`:
 
@@ -122,4 +130,10 @@ Additional regression validation:
 
 ```sh
 npm test -- tests/agentCommands.test.ts
+```
+
+Stale offline-message regression validation:
+
+```sh
+npm test -- tests/slackApp.test.ts
 ```

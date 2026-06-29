@@ -16,6 +16,7 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
     throw new Error("Slack tokens are required to create the Slack app.");
   }
 
+  const runtimeStartedAt = new Date();
   const app = new slackBolt.App({
     token: config.slack.botToken,
     appToken: config.slack.appToken,
@@ -51,6 +52,13 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
 
   app.message(async ({ message, say, logger }) => {
     if (!isDirectUserMessage(message)) {
+      return;
+    }
+
+    if (isMessageBeforeRuntimeStart(message, runtimeStartedAt)) {
+      logger.warn(
+        `Ignoring stale Slack DM from before Local Agent startup: channel=${message.channel} ts=${message.ts}`
+      );
       return;
     }
 
@@ -134,6 +142,7 @@ type SlackMessage = {
   channel?: string;
   text?: string;
   thread_ts?: string;
+  ts?: string;
 };
 
 export function isDirectUserMessage(message: unknown): message is Required<
@@ -149,4 +158,32 @@ export function isDirectUserMessage(message: unknown): message is Required<
     typeof candidate.channel === "string" &&
     typeof candidate.text === "string"
   );
+}
+
+export function isMessageBeforeRuntimeStart(message: SlackMessage, runtimeStartedAt: Date): boolean {
+  const messageTimeMs = parseSlackMessageTimestampMs(message.ts);
+  if (messageTimeMs === undefined) {
+    return false;
+  }
+
+  return messageTimeMs < runtimeStartedAt.getTime();
+}
+
+function parseSlackMessageTimestampMs(timestamp: string | undefined): number | undefined {
+  if (!timestamp) {
+    return undefined;
+  }
+
+  const match = /^(\d+)\.(\d{1,6})$/.exec(timestamp);
+  if (!match) {
+    return undefined;
+  }
+
+  const seconds = Number(match[1]);
+  const microseconds = Number(match[2].padEnd(6, "0"));
+  if (!Number.isSafeInteger(seconds) || !Number.isSafeInteger(microseconds)) {
+    return undefined;
+  }
+
+  return seconds * 1000 + Math.floor(microseconds / 1000);
 }

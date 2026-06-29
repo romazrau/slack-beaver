@@ -15,12 +15,16 @@ The third-party `taylorwilsdon/google_workspace_mcp` project remains a possible 
 - Added read-only Gmail, Drive, and Docs tools behind Tool Registry validation.
 - Google tools are visible to the model only when `GOOGLE_WORKSPACE_ENABLED=true` and the Google provider is marked connected.
 - Gmail and document content is treated as untrusted context and excluded from audit logs.
+- Local Agent startup now checks Google Workspace setup on every restart without contacting Google. When Google Workspace is enabled, it validates the local OAuth client id, token file readability, token shape, owner-only permissions, and whether an expired access token can be refreshed later.
+- Startup check results are synced into SQLite provider metadata before the online runtime notice is formatted, so Slack status reflects the latest local Google connection state.
+- If Google Workspace is enabled but setup is incomplete, startup logs and the configured Slack lifecycle notice target guide the user to run `npm run agent:google:login` and verify with `npm run agent:google:status`. The guidance never asks users to paste Google tokens into Slack.
 
 ## Validation
 
 - OAuth helper tests cover PKCE generation, state validation, missing-token guidance, and broad-permission token refusal.
 - Google Workspace adapter tests cover refresh-token handling and bounded Docs output.
 - Agent command tests cover Google tool catalog exposure and Gmail search without auditing email content.
+- Startup guidance tests cover disabled Google Workspace, missing OAuth client id, missing token, expired token without refresh token, connected metadata sync, and disconnected metadata sync.
 - `npm run typecheck` passed with Node.js 22.
 - `npm test` passed with Node.js 22.
 

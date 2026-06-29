@@ -42,7 +42,7 @@ Slack Beaver Local Agent is not reachable from this Slack conversation.
 Start the Local Agent on the configured computer with `npm run dev`, then try again.
 ```
 
-In the current architecture, Slack Socket Mode ingress runs inside the Local Agent process. If that process is fully stopped, Slack events are not received by this repo until the process starts again. A fully automatic Slack reply while the Local Agent is down requires a future always-on Center Server or another Slack ingress service.
+In the current architecture, Slack Socket Mode ingress runs inside the Local Agent process. If that process is fully stopped, Slack events are not received by this repo until the process starts again. When the process reconnects, DM message events with Slack timestamps older than the current Local Agent startup time are ignored so the bot does not answer messages sent while it was offline. A fully automatic Slack reply while the Local Agent is down requires a future always-on Center Server or another Slack ingress service.
 
 ## Manage Readable Folders From Slack
 
@@ -127,6 +127,8 @@ npm run agent:google:logout
 ```
 
 The Google token file stays under `GOOGLE_TOKEN_PATH` with owner-only permissions. Slack Beaver records only provider status, granted scopes, and account email in SQLite. The agent can use registered read-only Gmail, Google Drive, and Google Docs tools when Google Workspace is enabled and connected.
+
+On each Local Agent restart, Slack Beaver checks the local Google setup without contacting Google. If Google Workspace is enabled but this computer is not connected, the startup log and configured Slack lifecycle notice target guide the user to run `npm run agent:google:login` and verify with `npm run agent:google:status`.
 
 ## Local Agent Logs
 

@@ -26,6 +26,7 @@ Slack Beaver owns OAuth token state, provider metadata, tool policy, and audit b
   - `google_doc_read`
 - Exposed Google tools only when Google Workspace is enabled and local provider metadata says Google is connected.
 - Kept Google tokens out of SQLite and audit logs. SQLite stores provider status, granted scopes, and account email only.
+- Added restart-time Google Workspace connection checks. When Google Workspace is enabled but setup is incomplete, Local Agent startup logs and the configured Slack lifecycle notice target guide the user to run local Google login and status commands.
 
 ## Safety Decisions
 
@@ -43,9 +44,11 @@ Slack Beaver owns OAuth token state, provider metadata, tool policy, and audit b
 - Agent tool definitions include Google read-only tools only when Google is enabled and connected.
 - Malformed Google tool inputs and unknown tools are rejected through the Tool Registry.
 - Automated tests cover OAuth helper behavior, token permission refusal, adapter refresh behavior, Google tool exposure, and audit content safety.
+- Local Agent restart checks Google Workspace setup without contacting Google, syncs provider metadata, and sends user guidance when Google Workspace is enabled but not connected.
 
 ## Validation
 
 - `npm run typecheck` passed under Node.js 22.
 - `npm test` passed under Node.js 22.
+- Focused restart guidance validation passed for disabled Google Workspace, missing OAuth client id, missing token, expired token without refresh token, connected metadata sync, and disconnected metadata sync.
 - Live Google OAuth and Slack UAT remain pending because they require a real Google OAuth client and user consent flow.
