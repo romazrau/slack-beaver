@@ -175,7 +175,8 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.
 - Guarded OpenAI-backed `ask <question>` flow that can only call registered Tool Registry tools.
 - Read-only local file content tool for bounded follow-up reads after local search.
-- Retrieval answers from `ask <question>` and natural App DM are reviewed before Slack delivery when tool context was used; subjective short-passage requests ask a focused clarification before searching.
+- Retrieval answers from `ask <question>` and natural App DM are reviewed before Slack delivery when tool context was used; subjective short-passage requests ask a focused clarification before searching and short follow-up answers are carried back into the original request.
+- Agent loop trace logs are written under ignored `logs/agent-traces/` JSONL files with tool-call inputs, bounded result summaries, fallback reasons, and reviewer decisions for local debugging.
 - Repeated model-requested tool calls are stopped and answered from the last bounded tool output when possible.
 - Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
 - Center Server TODO API for creating, listing, fetching, and updating centrally stored TODOs.

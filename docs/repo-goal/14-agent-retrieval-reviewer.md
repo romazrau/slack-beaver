@@ -111,6 +111,17 @@ change tool policy, request secrets, execute commands, or grant folder access.
   follow-up search/read work while preserving repeated-tool-call detection.
 - Added a deterministic ambiguity guard for vague mood-based short-passage
   requests so the agent asks a focused clarification before model/tool use.
+- Added Chinese coverage for vague mood-based short-passage requests.
+- Added clarification follow-up handling so a short answer such as `安靜` is
+  carried back into the prior short-passage request instead of being treated as
+  a standalone search query.
+- Added a subjective-content fallback guard so repeated-tool or max-turn
+  fallback does not return raw local-search matches for passage-selection
+  requests.
+- Added local agent trace JSONL logs under ignored `logs/agent-traces/`. Trace
+  entries include the effective question, concrete tool-call input, bounded
+  result summaries, fallback reasons, and reviewer decisions. Full read bodies
+  are not written to trace logs.
 - Kept `find <query>` on the deterministic local-search path.
 
 ## Source Coverage
@@ -166,6 +177,10 @@ surface.
   context is insufficient instead of returning raw matches.
 - A vague request for a mood-based short passage does not fall back to raw
   `00-poc.md` search matches.
+- A short answer to the clarification, such as `安靜`, is combined with the
+  prior passage request before model/tool execution.
+- Local trace logs record concrete tool-call inputs and fallback reasons under
+  `logs/agent-traces/`.
 - `find <query>` keeps the existing deterministic search-only response.
 - Tests cover the logic changes.
 
@@ -205,8 +220,9 @@ npm run typecheck
 
 Focused tests cover reviewer acceptance, reviewer-requested extra context,
 reviewer rejection of irrelevant matches, vague short-passage clarification
-before search, audit content safety, Google/local read-only source coverage, and
-existing deterministic `find` compatibility.
+before search, Chinese clarification follow-up handling, trace logging of
+concrete tool-call input, audit content safety, Google/local read-only source
+coverage, and existing deterministic `find` compatibility.
 
 Live Slack/OpenAI UAT remains pending for prompt-quality assessment outside fake
 model tests.

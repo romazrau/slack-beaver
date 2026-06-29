@@ -18,6 +18,8 @@ coverage/
 
 # Local SQLite and runtime data
 *.sqlite
+*.sqlite-wal
+*.sqlite-shm
 *.sqlite3
 *.db
 *.db-wal

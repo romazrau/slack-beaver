@@ -56,7 +56,8 @@
 - App DM natural conversation instructions now explain those deterministic runtime commands and receive non-secret runtime status context, so the agent can say searchable paths can be added with `folders add /absolute/path/to/folder` or confirmed with `confirm folders add /absolute/path/to/folder` without silently granting folder access from natural language.
 - Local Agent startup and graceful shutdown now send best-effort online/offline Slack lifecycle notices to `LOCAL_AGENT_STATUS_CHANNEL_ID`, a subscribed Slack conversation, or a recent conversation fallback.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
-- The guarded OpenAI runner now asks a focused clarification for vague mood-based short-passage requests before search, routes retrieval draft answers through a no-tool reviewer role, and lets the reviewer accept, request more context, ask the user, or reject insufficient context.
+- The guarded OpenAI runner now asks a focused clarification for vague mood-based short-passage requests before search, carries short clarification follow-ups such as `安靜` back into the original request, routes retrieval draft answers through a no-tool reviewer role, and lets the reviewer accept, request more context, ask the user, or reject insufficient context.
+- Agent loop trace logs now write ignored JSONL files under `logs/agent-traces/` with effective questions, concrete tool-call inputs, bounded result summaries, fallback reasons, and reviewer decisions for local debugging.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
 - Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
 - Source code is now grouped by responsibility under `src/agent`, `src/cli`, `src/config`, `src/memory`, `src/observability`, `src/search`, `src/setup`, and `src/slack`.
@@ -98,7 +99,7 @@
 - Dynamic readable-scope and runtime notice planning was added as documentation only; no application logic changed in this step.
 - Dynamic readable-scope and runtime notice implementation passed focused command, memory, Slack status, runtime notice, and config tests plus typecheck under Node.js `v22.23.1`.
 - Agent command regression validation now covers natural conversation guidance for explicit `folders add /absolute/path/to/folder` setup, `confirm folders add /absolute/path/to/folder`, and runtime status context injection.
-- Agent retrieval reviewer validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering ambiguity-first clarification, reviewer acceptance, reviewer-requested extra context, reviewer rejection, audit safety, and deterministic `find` compatibility.
+- Agent retrieval reviewer validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering ambiguity-first clarification, Chinese clarification follow-up handling, reviewer acceptance, reviewer-requested extra context, reviewer rejection, trace logging, audit safety, and deterministic `find` compatibility.
 
 ## Likely Next Work
 

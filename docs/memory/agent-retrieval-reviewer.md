@@ -63,6 +63,23 @@ A deterministic guard catches vague mood-based short-passage requests before
 model/tool use and asks what mood or theme should be used. This specifically
 prevents the previous raw `00-poc.md` fallback for that class of request.
 
+The guard now covers the observed Chinese flow:
+
+- User asks for a local short passage that fits today's mood.
+- Agent asks which mood or theme to use.
+- User replies with a short answer such as `安靜`.
+- The runner combines that answer with the prior passage request before calling
+  the model, rather than treating `安靜` as a standalone search query.
+
+Subjective content-selection requests also bypass raw local-search fallback. If
+the runner hits repeated-tool or max-turn fallback, it now asks for more source
+or style guidance instead of listing raw matches such as `00-poc.md`.
+
+Agent loop trace logs are written to ignored `logs/agent-traces/YYYY-MM-DD.jsonl`
+files. These logs record the effective question, concrete tool-call inputs,
+bounded search result summaries, fallback reasons, and reviewer decisions. Full
+read bodies are not written to trace logs.
+
 `find <query>` remains deterministic search-only and does not use the reviewer.
 
 ## Tradeoffs
@@ -84,9 +101,12 @@ surface and avoids surprising users who expect direct search results.
 Automated validation now covers:
 
 - Ambiguous subjective request asks one clarifying question before tool use.
+- Chinese short-passage clarification follow-up is carried into the original
+  request.
 - Clear request searches, reads, and receives reviewer acceptance.
 - Reviewer can request more context without repeated identical tool loops.
 - Reviewer can reject irrelevant search matches instead of returning raw output.
+- Trace logs record concrete tool-call inputs and fallback reasons.
 - `find <query>` remains deterministic search-only.
 
 Validated with:

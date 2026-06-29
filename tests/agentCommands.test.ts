@@ -931,6 +931,130 @@ describe("runAgentTextCommand", () => {
     });
   });
 
+  it("asks one clarification for vague Chinese short-passage requests before searching", async () => {
+    await fs.writeFile(path.join(tempDir, "00-poc.md"), "今天適合的 POC planning note should not be returned raw.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let modelCalled = false;
+
+    const modelClient: AgentModelClient = {
+      async createResponse() {
+        modelCalled = true;
+        return {
+          responseId: "resp_1",
+          finalAnswer: "This should not be used.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "從我本地找到一個適合當作今天心情的短文",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(modelCalled).toBe(false);
+    expect(response).toContain("哪一種心情");
+    expect(response).not.toContain("00-poc.md");
+  });
+
+  it("treats a short mood answer as a follow-up to the prior Chinese clarification", async () => {
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const firstResponse = await runAgentTextCommand({
+      text: "從我本地找到一個適合當作今天心情的短文",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse() {
+          throw new Error("The first ambiguous request should not call the model.");
+        }
+      }
+    });
+
+    expect(firstResponse).toContain("哪一種心情");
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        expect(input.question).toContain("從我本地找到一個適合當作今天心情的短文");
+        expect(input.question).toContain("User clarified the desired mood or theme: 安靜");
+        return {
+          responseId: "resp_1",
+          finalAnswer: "我會找安靜風格的短文。",
+          toolCalls: []
+        };
+      }
+    };
+
+    const secondResponse = await runAgentTextCommand({
+      text: "安靜",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(secondResponse).toContain("安靜風格");
+  });
+
+  it("writes trace logs with concrete tool-call inputs for debugging", async () => {
+    await fs.writeFile(path.join(tempDir, "notes.md"), "Quiet courage is steady.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let modelCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse() {
+        modelCallCount += 1;
+        return {
+          responseId: `resp_${modelCallCount}`,
+          toolCalls: [
+            {
+              id: `call_${modelCallCount}`,
+              name: "local_search",
+              input: { query: "Quiet courage" }
+            }
+          ]
+        };
+      }
+    };
+
+    await runAgentTextCommand({
+      text: "ask Which file mentions quiet courage?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    const traceDir = path.join(path.dirname(config.auditLogPath), "agent-traces");
+    const traceFiles = await fs.readdir(traceDir);
+    const traceContent = await fs.readFile(path.join(traceDir, traceFiles[0] ?? ""), "utf8");
+
+    expect(traceContent).toContain("\"event\":\"tool_call_start\"");
+    expect(traceContent).toContain("\"query\":\"Quiet courage\"");
+    expect(traceContent).toContain("\"event\":\"fallback_answer\"");
+    expect(traceContent).toContain("\"reason\":\"repeated_tool_call\"");
+  });
+
   it("lets the reviewer request more context before accepting an answer", async () => {
     await fs.writeFile(path.join(tempDir, "notes.md"), "Rollout owner is Mira.", "utf8");
     await fs.writeFile(path.join(tempDir, "details.md"), "Rollout due date is Friday.", "utf8");

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config/config.js";
 import type { ConversationTurn, LocalMemoryStore } from "../memory/localMemory.js";
 import { formatOpenAiSetupGuidance } from "../slack/onboardingCopy.js";
@@ -14,6 +15,7 @@ import {
 import { createOpenAiResponsesModelClient } from "./openAiResponsesClient.js";
 import { resolveOpenAiModel } from "./openAiModels.js";
 import type { GoogleWorkspaceClient } from "../google/googleWorkspace.js";
+import { writeAgentTraceLog } from "../observability/agentTraceLog.js";
 import {
   buildRuntimeStatusSnapshot,
   buildRuntimeStatusSnapshotFromStore,
@@ -167,8 +169,30 @@ async function runAgentLoop(input: {
   instructions: string;
   conversationContext: AgentConversationContextItem[];
 }): Promise<{ answer: string; toolCallCount: number }> {
-  const clarification = buildClarificationForAmbiguousRetrievalRequest(input.question);
+  const traceId = randomUUID();
+  const clarificationFollowUp = buildClarificationFollowUpQuestion(input.question, input.conversationContext);
+  const effectiveQuestion = clarificationFollowUp?.question ?? input.question;
+  await traceAgentEvent(input, traceId, "agent_loop_start", {
+    originalQuestion: input.question,
+    effectiveQuestion,
+    hasClarificationFollowUp: clarificationFollowUp !== undefined
+  });
+
+  if (clarificationFollowUp) {
+    await traceAgentEvent(input, traceId, "clarification_follow_up", {
+      previousQuestion: clarificationFollowUp.previousQuestion,
+      currentAnswer: input.question
+    });
+  }
+
+  const clarification = clarificationFollowUp
+    ? undefined
+    : buildClarificationForAmbiguousRetrievalRequest(input.question);
   if (clarification) {
+    await traceAgentEvent(input, traceId, "clarification_requested", {
+      question: input.question,
+      clarification
+    });
     return {
       answer: clarification,
       toolCallCount: 0
@@ -186,7 +210,7 @@ async function runAgentLoop(input: {
   for (let turn = 0; turn <= input.config.ai.maxToolTurns + reviewerRequestCount; turn += 1) {
     const toolContext = buildToolExecutionContext(input);
     const response = await input.modelClient.createResponse({
-      question: input.question,
+      question: effectiveQuestion,
       instructions: reviewerFeedback
         ? `${input.instructions}\n\nReviewer requested more context before answering:\n${reviewerFeedback}`
         : input.instructions,
@@ -195,6 +219,12 @@ async function runAgentLoop(input: {
       toolOutputs,
       purpose: input.purpose,
       conversationContext: input.conversationContext
+    });
+    await traceAgentEvent(input, traceId, "model_response", {
+      turn,
+      responseId: response.responseId,
+      finalAnswerPresent: Boolean(response.finalAnswer),
+      toolCalls: response.toolCalls.map((toolCall) => summarizeToolCall(toolCall))
     });
 
     previousResponseId = response.responseId ?? previousResponseId;
@@ -209,11 +239,17 @@ async function runAgentLoop(input: {
 
       const review = await reviewDraftAnswer({
         input,
+        question: effectiveQuestion,
         draftAnswer: response.finalAnswer,
         gatheredToolOutputs
       });
+      await traceAgentEvent(input, traceId, "reviewer_decision", review);
 
       if (review.decision === "accept") {
+        await traceAgentEvent(input, traceId, "final_answer", {
+          reason: "reviewer_accept",
+          toolCallCount
+        });
         return {
           answer: response.finalAnswer,
           toolCallCount
@@ -221,6 +257,10 @@ async function runAgentLoop(input: {
       }
 
       if (review.decision === "ask_user") {
+        await traceAgentEvent(input, traceId, "final_answer", {
+          reason: "reviewer_ask_user",
+          toolCallCount
+        });
         return {
           answer: review.message ?? "What kind of result would be most useful here?",
           toolCallCount
@@ -228,6 +268,10 @@ async function runAgentLoop(input: {
       }
 
       if (review.decision === "reject_insufficient_context") {
+        await traceAgentEvent(input, traceId, "final_answer", {
+          reason: "reviewer_reject_insufficient_context",
+          toolCallCount
+        });
         return {
           answer:
             review.message ??
@@ -238,6 +282,10 @@ async function runAgentLoop(input: {
 
       reviewerRequestCount += 1;
       if (reviewerRequestCount > input.config.ai.maxToolTurns) {
+        await traceAgentEvent(input, traceId, "final_answer", {
+          reason: "reviewer_context_limit",
+          toolCallCount
+        });
         return {
           answer: "I found some context, but the review step could not validate a grounded answer.",
           toolCallCount
@@ -249,6 +297,10 @@ async function runAgentLoop(input: {
     }
 
     if (response.toolCalls.length === 0) {
+      await traceAgentEvent(input, traceId, "final_answer", {
+        reason: "no_tool_calls_no_final_answer",
+        toolCallCount
+      });
       return {
         answer: "I could not produce a grounded answer from the configured local context.",
         toolCallCount
@@ -256,16 +308,24 @@ async function runAgentLoop(input: {
     }
 
     if (response.toolCalls.some((toolCall) => executedToolCallSignatures.has(buildToolCallSignature(toolCall)))) {
+      await traceAgentEvent(input, traceId, "fallback_answer", {
+        reason: "repeated_tool_call",
+        toolOutputs: toolOutputs.map((output) => summarizeToolOutput(output))
+      });
       return {
-        answer: buildToolOutputFallbackAnswer(toolOutputs),
+        answer: buildToolOutputFallbackAnswer(toolOutputs, effectiveQuestion),
         toolCallCount
       };
     }
 
     if (turn === input.config.ai.maxToolTurns + reviewerRequestCount) {
       if (toolOutputs.some((output) => output.resultCount > 0)) {
+        await traceAgentEvent(input, traceId, "fallback_answer", {
+          reason: "max_tool_turns",
+          toolOutputs: toolOutputs.map((output) => summarizeToolOutput(output))
+        });
         return {
-          answer: buildToolOutputFallbackAnswer(toolOutputs),
+          answer: buildToolOutputFallbackAnswer(toolOutputs, effectiveQuestion),
           toolCallCount
         };
       }
@@ -275,7 +335,9 @@ async function runAgentLoop(input: {
     toolOutputs = [];
     for (const toolCall of response.toolCalls) {
       executedToolCallSignatures.add(buildToolCallSignature(toolCall));
+      await traceAgentEvent(input, traceId, "tool_call_start", summarizeToolCall(toolCall));
       const result = await runAgentToolCall(toolCall, toolContext);
+      await traceAgentEvent(input, traceId, "tool_call_result", summarizeToolOutput(result));
       toolOutputs.push(result);
       gatheredToolOutputs.push(result);
       toolCallCount += 1;
@@ -293,15 +355,15 @@ type ReviewerDecision =
 
 async function reviewDraftAnswer(input: {
   input: {
-    question: string;
     modelClient: AgentModelClient;
     conversationContext: AgentConversationContextItem[];
   };
+  question: string;
   draftAnswer: string;
   gatheredToolOutputs: AgentToolCallResult[];
 }): Promise<ReviewerDecision> {
   const response = await input.input.modelClient.createResponse({
-    question: input.input.question,
+    question: input.question,
     instructions: buildReviewerInstructions(input.draftAnswer),
     tools: [],
     toolOutputs: input.gatheredToolOutputs,
@@ -367,7 +429,11 @@ function normalizeToolCallInput(input: unknown): unknown {
   return input;
 }
 
-function buildToolOutputFallbackAnswer(toolOutputs: AgentToolCallResult[]): string {
+function buildToolOutputFallbackAnswer(toolOutputs: AgentToolCallResult[], question?: string): string {
+  if (question && isSubjectiveContentSelectionRequest(question)) {
+    return "I found some local matches, but I could not validate a suitable passage from the configured context. What kind of source or style should I prioritize?";
+  }
+
   const localSearchOutputs = toolOutputs.filter((output) => output.name === "local_search");
   if (localSearchOutputs.length > 0) {
     return buildLocalSearchFallbackAnswer(localSearchOutputs);
@@ -458,6 +524,44 @@ function parseLocalSearchToolOutput(output: string): Array<{
   } catch {
     return [];
   }
+}
+
+type ClarificationFollowUp = {
+  previousQuestion: string;
+  question: string;
+};
+
+function buildClarificationFollowUpQuestion(
+  currentQuestion: string,
+  conversationContext: AgentConversationContextItem[]
+): ClarificationFollowUp | undefined {
+  const current = currentQuestion.trim();
+  if (!current || current.length > 40) {
+    return undefined;
+  }
+
+  const recentAssistant = [...conversationContext].reverse().find((item) => item.role === "assistant");
+  const recentUser = [...conversationContext].reverse().find((item) => item.role === "user");
+  if (!recentAssistant || !recentUser) {
+    return undefined;
+  }
+
+  if (!isMoodClarificationQuestion(recentAssistant.content)) {
+    return undefined;
+  }
+
+  if (!isSubjectiveContentSelectionRequest(recentUser.content)) {
+    return undefined;
+  }
+
+  return {
+    previousQuestion: recentUser.content,
+    question: [
+      recentUser.content,
+      "",
+      `User clarified the desired mood or theme: ${current}`
+    ].join("\n")
+  };
 }
 
 function buildToolExecutionContext(input: {
@@ -601,20 +705,137 @@ function buildReviewerInstructions(draftAnswer: string): string {
 }
 
 function buildClarificationForAmbiguousRetrievalRequest(question: string): string | undefined {
-  const normalized = question.toLowerCase();
-  const subjectiveSelection =
-    /\b(short|brief)\s+(passage|quote|excerpt|text|reading)\b/.test(normalized) ||
-    /\b(passages|quotes|excerpts)\b/.test(normalized);
-  const vagueMood = /\b(mood|vibe|feeling|tone|suitable|fit|fits|good)\b/.test(normalized);
-  const clearLocator =
-    /\b(from|in|about|mentions|says|according to|which file|what does|summari[sz]e)\b/.test(normalized) ||
-    /["`]/.test(question);
-
-  if (subjectiveSelection && vagueMood && !clearLocator) {
-    return "What kind of mood or theme should the short passage fit?";
+  if (isSubjectiveContentSelectionRequest(question) && !hasSpecificContentPreference(question)) {
+    return containsCjkText(question)
+      ? "可以。你今天想要哪一種心情的短文？\n\n例如：開心、放鬆、被鼓勵、安靜、幽默、充滿幹勁。"
+      : "What kind of mood or theme should the short passage fit?";
   }
 
   return undefined;
+}
+
+function isSubjectiveContentSelectionRequest(question: string): boolean {
+  const normalized = question.toLowerCase();
+  const subjectiveSelection =
+    /\b(short|brief)\s+(passage|quote|excerpt|text|reading)\b/.test(normalized) ||
+    /\b(passages|quotes|excerpts)\b/.test(normalized) ||
+    /短文|短句|引文|摘錄|段落|文章|詩/.test(question);
+  const vagueMood =
+    /\b(mood|vibe|feeling|tone|suitable|fit|fits|good)\b/.test(normalized) ||
+    /心情|情緒|感覺|適合|今天|氛圍|風格/.test(question);
+
+  return subjectiveSelection && vagueMood;
+}
+
+function hasSpecificContentPreference(question: string): boolean {
+  const normalized = question.toLowerCase();
+  if (
+    /\b(calm|quiet|happy|funny|encouraging|relaxed|peaceful|sad|focused|motivated)\b/.test(normalized) ||
+    /安靜|平靜|開心|放鬆|鼓勵|幽默|幹勁|努力|悲傷|療癒|沉穩|溫柔|勇氣/.test(question)
+  ) {
+    return true;
+  }
+
+  const clearLocator =
+    /\b(from|in|about|mentions|says|according to|which file|what does|summari[sz]e)\b/.test(normalized) ||
+    /關於|提到|根據|哪個檔案|總結|摘要/.test(question) ||
+    /["`「」『』]/.test(question);
+
+  return clearLocator;
+}
+
+function isMoodClarificationQuestion(answer: string): boolean {
+  return (
+    /What kind of mood or theme should the short passage fit\?/.test(answer) ||
+    /哪一種心情的短文/.test(answer)
+  );
+}
+
+function containsCjkText(value: string): boolean {
+  return /[\u3400-\u9fff]/.test(value);
+}
+
+async function traceAgentEvent(
+  input: {
+    source: AgentCommandSource;
+    config: AppConfig;
+    purpose: "question" | "conversation";
+  },
+  traceId: string,
+  event: Parameters<typeof writeAgentTraceLog>[1]["event"],
+  detail: Record<string, unknown>
+): Promise<void> {
+  try {
+    await writeAgentTraceLog(input.config, {
+      traceId,
+      event,
+      source: input.source,
+      purpose: input.purpose,
+      detail
+    });
+  } catch {
+    // Trace logging must never break Slack replies.
+  }
+}
+
+function summarizeToolCall(toolCall: AgentToolCallRequest): Record<string, unknown> {
+  return {
+    id: toolCall.id,
+    name: toolCall.name,
+    input: toolCall.input
+  };
+}
+
+function summarizeToolOutput(output: AgentToolCallResult): Record<string, unknown> {
+  return {
+    callId: output.callId,
+    name: output.name,
+    resultCount: output.resultCount,
+    output: summarizeToolOutputJson(output)
+  };
+}
+
+function summarizeToolOutputJson(output: AgentToolCallResult): unknown {
+  try {
+    const parsed = JSON.parse(output.output) as {
+      results?: Array<{ filename?: unknown; path?: unknown; matchType?: unknown; snippet?: unknown }>;
+      file?: { filename?: unknown; path?: unknown; truncated?: unknown; content?: unknown };
+      messages?: unknown;
+      documents?: unknown;
+      message?: unknown;
+      document?: unknown;
+    };
+
+    if (Array.isArray(parsed.results)) {
+      return {
+        results: parsed.results.slice(0, 5).map((result) => ({
+          filename: result.filename,
+          path: result.path,
+          matchType: result.matchType,
+          snippet: typeof result.snippet === "string" ? result.snippet.slice(0, 240) : undefined
+        }))
+      };
+    }
+
+    if (parsed.file) {
+      return {
+        file: {
+          filename: parsed.file.filename,
+          path: parsed.file.path,
+          truncated: parsed.file.truncated,
+          contentChars: typeof parsed.file.content === "string" ? parsed.file.content.length : undefined
+        }
+      };
+    }
+
+    return {
+      keys: Object.keys(parsed)
+    };
+  } catch {
+    return {
+      rawChars: output.output.length
+    };
+  }
 }
 
 function buildConversationInstructions(context: Pick<ToolExecutionContext, "config" | "memoryStore">): string {
