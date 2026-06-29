@@ -126,7 +126,7 @@ npm run agent:google:status
 npm run agent:google:logout
 ```
 
-The Google token file stays under `GOOGLE_TOKEN_PATH` with owner-only permissions. Slack Beaver records only provider status, granted scopes, and account email in SQLite. The agent can use registered read-only Gmail, Google Drive, and Google Docs tools when Google Workspace is enabled and connected.
+The Google token file stays under `GOOGLE_TOKEN_PATH` with owner-only permissions. Slack Beaver records only provider status, granted scopes, and account email in SQLite. The agent can use registered read-only Gmail, Google Drive, Google Docs, and PDF read tools when Google Workspace is enabled and connected.
 
 On each Local Agent restart, Slack Beaver checks the local Google setup without contacting Google. If Google Workspace is enabled but this computer is not connected, the startup log and configured Slack lifecycle notice target guide the user to run `npm run agent:google:login` and verify with `npm run agent:google:status`.
 
@@ -187,17 +187,17 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - Local runtime heartbeat status in Slack App Home, with shared fixed offline guidance for unavailable-agent cases.
 - `/agent find <query>` slash command for read-only local file search.
 - Slack App Home and Messages tab support for `find <query>`, `ask <question>`, `folders list/add/remove`, `status`, `status subscribe`, and natural App DM conversation.
-- Allowlisted local folder search for Markdown, text, CSV, and JSON-style local files.
+- Allowlisted local folder search for Markdown, text, CSV, JSON-style, and PDF local files.
 - Denylist and max-file-size guards for local file access.
 - SQLite local memory for enabled folders, provider setup metadata, conversation turns, summaries, and tool-call summaries.
 - Best-effort Local Agent online/offline Slack lifecycle notices with env, subscribed, or recent-conversation targets.
 - Natural App DM runtime context that lets the agent explain current readable folders, setup status, and explicit folder-add confirmation commands without silently changing folder access.
 - Local-only OpenAI token setup through CLI; token-like Slack messages are refused.
 - Local-only OpenAI model discovery and switching through CLI.
-- Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.
+- Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, Docs, and Drive PDF tools.
 - Guarded OpenAI-backed `ask <question>` flow that can only call registered Tool Registry tools.
 - Typed planner, deterministic executor, evidence ledger, and reviewer workflow for AI retrieval answers when `TYPED_AGENT_WORKFLOW_ENABLED` is true.
-- Read-only local file content tool for bounded follow-up reads after local search.
+- Read-only local file content tool for bounded follow-up reads after local search, including PDF text extraction.
 - Retrieval answers from `ask <question>` and natural App DM are reviewed before Slack delivery when tool context was used; subjective short-passage requests ask a focused clarification before searching, short follow-up answers are carried back into the original request, content-like files are preferred over README/planning search-hint files for typed reads without demoting ordinary `docs/` content, reviewer follow-up instructions are not returned directly to Slack, and over-budget tool loops can pause with partial results, explicitly ask whether to continue, route natural-language replies through a no-tool confirmation classifier, then resume or stop from the saved pending tool call.
 - Agent workflow event logs are written under ignored `logs/agent-events/` JSONL files with local time, Slack correlation metadata, planner/executor/reviewer events, and redacted or bounded IO summaries.
 - Agent loop trace logs are written under ignored `logs/agent-traces/` JSONL files with tool-call inputs, bounded result summaries, fallback reasons, and reviewer decisions for local debugging.

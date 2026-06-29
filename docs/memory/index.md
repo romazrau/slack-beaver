@@ -25,7 +25,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `reproducible-demo-planning.md`: Dedicated repeatable POC demo folder for Slack local-agent, Center task dispatch, multi-agent comparison, fixture expectations, and evidence capture.
 - `remote-task-dispatch-planning.md`: Planned next hybrid POC for Center Server-owned agent tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - `repo-initialization.md`: Initial repository documentation and ignore-rule decisions.
-- `search-read-summarize-planning.md`: Implemented local and Google search/read/summarize workflow, including minimum token access by provider.
+- `search-read-summarize-planning.md`: Implemented local and Google search/read/summarize workflow, including local and Google Drive PDF reads plus minimum token access by provider.
 - `slack-openai-uat.md`: Live Slack/OpenAI UAT results, repeated tool-call finding, deterministic runner fallback, and fixture-scope note.
 - `slack-app-setup-and-uat.md`: Real Slack app setup, secret handling, local daemon operation, runtime fix, and live UAT results for Slack Local File Search v0.
 - `slack-app-home-chat.md`: Decision and implementation notes for Slack-native App Home and Messages tab chat.

@@ -17,12 +17,16 @@ Changes:
 - Added `local_file_read` as a read-only Tool Registry tool.
 - Added bounded local file reads behind allowlist, denylist, supported
   extension, max-file-size, and text-read checks.
+- Added bounded PDF text extraction for allowlisted local PDFs and Google Drive
+  PDFs.
+- Added `google_drive_file_read` so Drive search results can be read when they
+  are native Google Docs or PDFs.
 - Updated agent instructions to search first, read the top one to three relevant
   sources only when snippets are insufficient, and cite sources.
 - Updated the agent-readable tool catalog to include `local_file_read`.
 - Kept deterministic `find <query>` search-only.
 - Added fake-client coverage for local search/read, Gmail search/read, and
-  Google Drive search plus Docs read.
+  Google Drive search plus Drive file read.
 - Added audit safety coverage so local file, email, and document bodies are not
   written to JSONL audit logs.
 
@@ -32,7 +36,8 @@ Changes:
 - Keep deterministic `find <query>` search-only.
 - Update agent instructions so `ask <question>` and natural App DM conversation
   can use local and Google search/read tool pairs.
-- Keep Google Workspace read-only with existing Gmail, Drive, and Docs tools.
+- Keep Google Workspace read-only with existing Gmail, Drive, Docs, and PDF
+  read tools.
 - Keep audit logs body-safe by recording summaries rather than retrieved
   content.
 
@@ -73,3 +78,8 @@ Validation completed:
   under Node.js 22.23.1.
 - `npm run verify` passed under Node.js 22.23.1 with 19 test files and 99
   tests.
+- `npm test -- tests/localSearch.test.ts tests/googleWorkspace.test.ts tests/agentPlan.test.ts tests/agentCommands.test.ts`
+  passed after adding local and Google Drive PDF read coverage.
+- Live Google Drive PDF smoke found `置身钉内 14.34.50.pdf`, read it through
+  `google_drive_file_read`, extracted 4000 bounded characters, and did not print
+  document content.

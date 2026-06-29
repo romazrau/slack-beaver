@@ -51,7 +51,8 @@
 - Source code now includes local CLI OpenAI model discovery and switching, with `gpt-5.5` as the default model and selected model state stored in SQLite settings.
 - Source code now includes local CLI Google OAuth login/status/logout, owner-only Google token file handling, and read-only Gmail, Drive, and Docs Tool Registry tools.
 - Local Agent startup now checks Google Workspace connection state on each restart and sends setup guidance through startup logs plus the configured Slack lifecycle notice target when Google Workspace is enabled but not connected.
-- Source code now includes `local_file_read`, a bounded read-only local file content tool for follow-up reads after `local_search`.
+- Source code now includes `local_file_read`, a bounded read-only local file content tool for follow-up reads after `local_search`, including PDF text extraction for allowlisted local PDFs.
+- Source code now includes `google_drive_file_read`, a bounded read-only Google Drive file content tool for native Google Docs and Google Drive PDFs returned by Drive search.
 - Source code now includes Center Server agent registration, heartbeat, `agent_tasks` lifecycle state, claim leases, Center CLI smoke commands, and a one-shot Local Agent worker for `answer_question` tasks.
 - Source code now records a Local Agent runtime heartbeat in SQLite on startup and App Home opens, and Slack App Home displays the runtime as online, stale, or not seen yet.
 - Slack unavailable-agent guidance is centralized as a fixed response formatter, while the current architecture still requires the Local Agent process to be running for Socket Mode events to reach this repo.
@@ -99,6 +100,8 @@
 - Fixture-scope UAT found that `.env` `WATCHED_FOLDERS` and SQLite local-memory allowed folders are merged, so pure fixture UAT requires clearing or aligning `.env` watched folders.
 - Center Server TODO validation passed with focused repository/API handler tests, full `npm run verify` with 18 test files and 90 tests, and local running-server HTTP UAT for health/create/update/list.
 - Search/read/summarize validation passed with focused `localSearch` and `agentCommands` tests, plus full `npm run verify` under Node.js `v22.23.1` with 19 test files and 99 tests.
+- Local and Google Drive PDF read validation passed focused `localSearch`, `googleWorkspace`, `agentPlan`, and `agentCommands` tests, covering local PDF text extraction, Drive PDF download/extraction, and typed Google Drive search-to-read planning.
+- Live Google Drive PDF smoke passed for `置身钉内 14.34.50.pdf`: Drive search found the PDF, `google_drive_file_read` downloaded it read-only, extracted 4000 bounded characters, and reported truncation without printing document content.
 - Remote Task Dispatch validation passed with focused `agentTaskRepository`, `centerServer`, and `agentWorker` tests under Node.js `v22.23.1` with 14 tests, full `npm run verify` with 21 test files and 109 tests, CLI smoke for register/create/claim/list against a temporary SQLite DB, and local running-server worker UAT against `http://127.0.0.1:4319`.
 - Local Agent runtime status validation covers heartbeat persistence, App Home online/stale/not-seen status formatting, and fixed unavailable-agent response text.
 - Chrome UAT confirmed the current Chrome profile still blocks direct `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; Computer Use could inspect Finder but returned `cgWindowNotFound` for Chrome.
@@ -119,7 +122,7 @@
 
 - Resolve Chrome profile blocking for direct localhost Center Server page UAT, or use an approved browser profile/settings path for local API pages.
 - Decide whether to move Slack ingress to an always-on Center Server path when automatic Slack replies are required while a user-owned Local Agent is offline.
-- Run live Slack DM UAT for Gmail, Drive, and Docs read-only queries now that local Google OAuth login is connected.
+- Run live Slack DM UAT for Gmail, Drive, Docs, and PDF read-only queries now that local Google OAuth login is connected.
 - Re-run live Slack UAT for the previously failing `ask` prompts after repeated-tool-call hardening.
 - Expand prompt-injection fixtures beyond the current unknown-tool and malformed-input tests.
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.

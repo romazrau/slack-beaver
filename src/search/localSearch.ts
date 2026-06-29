@@ -1,7 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { extractPdfText } from "../pdf/pdfText.js";
 
-export const SUPPORTED_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".csv", ".json"]);
+export const SUPPORTED_EXTENSIONS = new Set([".txt", ".md", ".markdown", ".csv", ".json", ".pdf"]);
 
 export type MatchType = "filename" | "content";
 
@@ -30,6 +31,11 @@ export type LocalSearchOptions = {
 type CandidateFile = {
   path: string;
   filename: string;
+};
+
+type SupportedFileTextResult = {
+  content: string;
+  truncated: boolean;
 };
 
 const DEFAULT_SNIPPET_LENGTH = 160;
@@ -80,12 +86,12 @@ export async function searchLocalFiles(
       continue;
     }
 
-    const content = await readTextFile(file.path);
-    if (content === undefined) {
+    const fileText = await readSupportedFileText(file.path);
+    if (fileText === undefined) {
       continue;
     }
 
-    const normalizedContent = normalizeContent(content);
+    const normalizedContent = normalizeContent(fileText.content);
     const contentIndex = normalizedContent.toLowerCase().indexOf(normalizedQuery);
     if (contentIndex >= 0) {
       results.push({
@@ -142,17 +148,18 @@ export async function readLocalTextFile(
     throw new Error("Local file is larger than the configured maximum.");
   }
 
-  const content = await readTextFile(resolvedPath);
-  if (content === undefined) {
-    throw new Error("Local file could not be read as text.");
+  const fileText = await readSupportedFileText(resolvedPath, maxChars);
+  if (fileText === undefined) {
+    throw new Error("Local file could not be read.");
   }
 
+  const content = fileText.content;
   const bounded = content.length > maxChars ? content.slice(0, maxChars) : content;
   return {
     path: resolvedPath,
     filename: path.basename(resolvedPath),
     content: bounded,
-    truncated: bounded.length < content.length
+    truncated: fileText.truncated || bounded.length < content.length
   };
 }
 
@@ -238,6 +245,19 @@ async function readTextFile(filePath: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+async function readSupportedFileText(filePath: string, maxChars?: number): Promise<SupportedFileTextResult | undefined> {
+  if (path.extname(filePath).toLowerCase() === ".pdf") {
+    try {
+      const data = await fs.readFile(filePath);
+      return extractPdfText(new Uint8Array(data), maxChars);
+    } catch {
+      return undefined;
+    }
+  }
+  const content = await readTextFile(filePath);
+  return content === undefined ? undefined : { content, truncated: false };
 }
 
 function normalizeContent(content: string): string {

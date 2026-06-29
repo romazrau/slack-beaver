@@ -233,7 +233,7 @@ Current Google OAuth scopes are:
 
 Do not request Gmail send/modify/delete, Drive write/share/delete, Docs write/comment, Calendar, Contacts, Admin SDK, or broad Workspace management scopes for the current read-only agent.
 
-The read-only tools exposed to the agent are `local_search`, `local_file_read`, `gmail_search`, `gmail_read_message`, `google_drive_search`, and `google_doc_read` when their providers are configured. They stay behind the Tool Registry and return bounded content. Local file, Gmail, and document bodies are treated as untrusted context and are not written to the JSONL audit log.
+The read-only tools exposed to the agent are `local_search`, `local_file_read`, `gmail_search`, `gmail_read_message`, `google_drive_search`, `google_doc_read`, and `google_drive_file_read` when their providers are configured. `local_file_read` can extract bounded text from allowlisted local PDFs. `google_drive_file_read` can read native Google Docs and Google Drive PDFs returned by Drive search. They stay behind the Tool Registry and return bounded content. Local file, Gmail, document, and PDF bodies are treated as untrusted context and are not written to the JSONL audit log.
 
 Reset local memory with double confirmation:
 

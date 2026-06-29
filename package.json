@@ -67,7 +67,8 @@
     "@slack/bolt": "^3.21.2",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.7",
-    "openai": "^6.45.0"
+    "openai": "^6.45.0",
+    "pdfjs-dist": "^5.4.394"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

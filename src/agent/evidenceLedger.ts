@@ -1,7 +1,7 @@
 import type { AgentToolCallResult } from "./toolRegistry.js";
 
 export type EvidenceItem = {
-  sourceType: "local_file" | "gmail" | "google_doc" | "unknown";
+  sourceType: "local_file" | "gmail" | "google_drive_file" | "unknown";
   title: string;
   locator: string;
   snippet?: string;
@@ -73,10 +73,10 @@ function parseToolOutput(output: AgentToolCallResult): EvidenceItem[] {
       const document = parsed.document as Record<string, unknown>;
       return [
         {
-          sourceType: "google_doc",
+          sourceType: "google_drive_file",
           title: stringOrFallback(document.title, "Google Doc"),
           locator: stringOrFallback(document.documentId, "unknown document"),
-          contentPreview: truncate(stringOrFallback(document.text, ""), 500),
+          contentPreview: truncate(stringOrFallback(document.content, stringOrFallback(document.text, "")), 500),
           toolName: output.name
         }
       ];
@@ -117,7 +117,7 @@ function parseSearchResult(toolName: AgentToolCallResult["name"], result: unknow
   if (toolName === "google_drive_search") {
     return [
       {
-        sourceType: "google_doc",
+        sourceType: "google_drive_file",
         title: stringOrFallback(record.name, "Google Drive item"),
         locator: stringOrFallback(record.documentId, "unknown document"),
         snippet: truncate(stringOrFallback(record.mimeType, ""), 300),

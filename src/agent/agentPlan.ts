@@ -8,7 +8,7 @@ export type AgentPlanSearchStep = {
 };
 
 export type AgentPlanReadStep = {
-  tool: Extract<RegisteredToolName, "local_file_read" | "gmail_read_message" | "google_doc_read">;
+  tool: Extract<RegisteredToolName, "local_file_read" | "gmail_read_message" | "google_doc_read" | "google_drive_file_read">;
   fromSearchIndex: number;
 };
 
@@ -30,7 +30,7 @@ export type AgentPlan = {
 const SEARCH_TO_READ_TOOL: Record<AgentPlanSearchStep["tool"], AgentPlanReadStep["tool"] | undefined> = {
   local_search: "local_file_read",
   gmail_search: "gmail_read_message",
-  google_drive_search: "google_doc_read"
+  google_drive_search: "google_drive_file_read"
 };
 
 export function parseAgentPlan(value: string | undefined): { ok: true; plan: AgentPlan } | { ok: false; reason: string } {
@@ -219,7 +219,12 @@ function parseReads(
     if (unexpected.length > 0) {
       return { ok: false, reason: `unexpected read fields: ${unexpected.join(", ")}` };
     }
-    if (item.tool !== "local_file_read" && item.tool !== "gmail_read_message" && item.tool !== "google_doc_read") {
+    if (
+      item.tool !== "local_file_read" &&
+      item.tool !== "gmail_read_message" &&
+      item.tool !== "google_doc_read" &&
+      item.tool !== "google_drive_file_read"
+    ) {
       return { ok: false, reason: "unsupported read tool" };
     }
     const fromSearchIndex = item.fromSearchIndex;

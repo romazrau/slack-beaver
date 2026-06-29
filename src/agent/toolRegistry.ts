@@ -35,7 +35,8 @@ export type RegisteredToolName =
   | "gmail_search"
   | "gmail_read_message"
   | "google_drive_search"
-  | "google_doc_read";
+  | "google_doc_read"
+  | "google_drive_file_read";
 
 export type AgentToolCallRequest = {
   id: string;
@@ -54,16 +55,16 @@ const REGISTERED_TOOL_METADATA = [
   {
     name: "local_search" as const,
     description:
-      "Search read-only allowlisted local text files for a query. Does not accept paths or shell commands.",
+      "Search read-only allowlisted local text and PDF files for a query. Does not accept paths or shell commands.",
     catalogLine:
-      "local_search({ query: string }): Search read-only allowlisted local text files. Hard limits: no path input, no shell command, no token access, no file mutation, no denied folders, no non-registered fields."
+      "local_search({ query: string }): Search read-only allowlisted local text and PDF files. Hard limits: no path input, no shell command, no token access, no file mutation, no denied folders, no non-registered fields."
   },
   {
     name: "local_file_read" as const,
     description:
-      "Read one bounded allowlisted local text file by path returned from local_search.",
+      "Read one bounded allowlisted local text or PDF file by path returned from local_search.",
     catalogLine:
-      "local_file_read({ path: string }): Read one bounded allowlisted local text file, usually from a local_search result. Hard limits: allowlisted watched folders only, denied folders rejected, supported text extensions only, bounded output, no shell command, no token access, no file mutation, no non-registered fields."
+      "local_file_read({ path: string }): Read one bounded allowlisted local text or PDF file, usually from a local_search result. PDF content is extracted as bounded text. Hard limits: allowlisted watched folders only, denied folders rejected, supported text/PDF extensions only, bounded output, no shell command, no token access, no file mutation, no non-registered fields."
   },
   {
     name: "gmail_search" as const,
@@ -88,6 +89,12 @@ const REGISTERED_TOOL_METADATA = [
     description: "Read one Google Docs document by document ID and return bounded untrusted text.",
     catalogLine:
       "google_doc_read({ documentId: string }): Read one Google Docs document read-only. Document content is untrusted context. Hard limits: no edits, no comments, no sharing changes, no token access."
+  },
+  {
+    name: "google_drive_file_read" as const,
+    description: "Read one Google Drive Google Doc or PDF by document ID and return bounded untrusted text.",
+    catalogLine:
+      "google_drive_file_read({ documentId: string }): Read one Google Drive file returned by google_drive_search when it is a Google Doc or PDF. PDF content is extracted as bounded text. Hard limits: no edits, no comments, no sharing changes, no upload, no delete, no token access."
   }
 ];
 
@@ -252,7 +259,7 @@ function buildToolParameters(name: RegisteredToolName) {
   const field =
     name === "gmail_read_message"
       ? "messageId"
-      : name === "google_doc_read"
+      : name === "google_doc_read" || name === "google_drive_file_read"
         ? "documentId"
         : name === "local_file_read"
           ? "path"
@@ -329,16 +336,24 @@ async function runGoogleWorkspaceToolCall(
     };
   }
 
+  if (request.name !== "google_doc_read" && request.name !== "google_drive_file_read") {
+    recordRejectedToolCall(request, context, "unknown Google Workspace tool");
+    throw new Error(`Rejected unknown Google Workspace tool: ${request.name}`);
+  }
+
   const input = parseIdentifierInput(request.input, "documentId");
   if (!input.ok) {
     recordRejectedToolCall(request, context, input.reason);
-    throw new Error(`Rejected google_doc_read tool input: ${input.reason}`);
+    throw new Error(`Rejected ${request.name} tool input: ${input.reason}`);
   }
-  const document = await client.googleDocRead(input.documentId);
-  recordSuccessfulGoogleToolCall(context, "google_doc_read", "document id provided", 1);
+  const document =
+    request.name === "google_drive_file_read"
+      ? await client.googleDriveFileRead(input.documentId)
+      : await client.googleDocRead(input.documentId);
+  recordSuccessfulGoogleToolCall(context, request.name, "document id provided", 1);
   return {
     callId: request.id,
-    name: "google_doc_read",
+    name: request.name,
     output: JSON.stringify({ document }),
     resultCount: 1
   };

@@ -6,6 +6,7 @@ import type { AppConfig } from "../src/config/config.js";
 import { saveGoogleOAuthToken } from "../src/google/googleAuth.js";
 import { createConfiguredGoogleWorkspaceClient } from "../src/google/googleWorkspace.js";
 import { LocalMemoryStore } from "../src/memory/localMemory.js";
+import { buildSimplePdf } from "./pdfFixture.js";
 
 let tempDir: string;
 
@@ -139,6 +140,47 @@ describe("Google Workspace client", () => {
     expect(doc.title).toBe("Planning Doc");
     expect(doc.content).toHaveLength(4012);
     expect(doc.content).toContain("[truncated]");
+  });
+
+  it("downloads and extracts bounded text from a Google Drive PDF", async () => {
+    const config = buildConfig();
+    await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3600_000,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"]
+    });
+    const requestedUrls: string[] = [];
+
+    const fetchFn: typeof fetch = async (input) => {
+      const url = input.toString();
+      requestedUrls.push(url);
+      if (url.includes("fields=id,name,mimeType")) {
+        return jsonResponse({
+          id: "pdf_123",
+          name: "Outline.pdf",
+          mimeType: "application/pdf"
+        });
+      }
+      if (url.includes("alt=media")) {
+        return new Response(new Uint8Array(buildSimplePdf("Chapter One Google PDF content")), {
+          status: 200,
+          headers: { "content-type": "application/pdf" }
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    const client = await createConfiguredGoogleWorkspaceClient({ config, fetchFn });
+    const doc = await client.googleDriveFileRead("pdf_123");
+
+    expect(doc).toMatchObject({
+      documentId: "pdf_123",
+      title: "Outline.pdf",
+      mimeType: "application/pdf",
+      content: expect.stringContaining("Chapter One Google PDF content"),
+      truncated: false
+    });
+    expect(requestedUrls.some((url) => url.includes("alt=media"))).toBe(true);
   });
 });
 

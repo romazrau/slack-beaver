@@ -449,7 +449,8 @@ describe("runAgentTextCommand", () => {
           "gmail_search",
           "gmail_read_message",
           "google_drive_search",
-          "google_doc_read"
+          "google_doc_read",
+          "google_drive_file_read"
         ]);
         expect(input.instructions).toContain("gmail_search");
         return {
@@ -539,6 +540,9 @@ describe("runAgentTextCommand", () => {
           throw new Error("not used");
         },
         async googleDocRead() {
+          throw new Error("not used");
+        },
+        async googleDriveFileRead() {
           throw new Error("not used");
         }
       }
@@ -724,6 +728,9 @@ describe("runAgentTextCommand", () => {
         },
         async googleDocRead() {
           throw new Error("not used");
+        },
+        async googleDriveFileRead() {
+          throw new Error("not used");
         }
       }
     });
@@ -735,7 +742,7 @@ describe("runAgentTextCommand", () => {
     expect(auditLine).not.toContain("lead@example.com");
   });
 
-  it("runs Google Drive search then Google Docs read before answering", async () => {
+  it("runs Google Drive search then Google Drive file read before answering", async () => {
     const config = buildConfig();
     config.localFiles.watchedFolders = [];
     config.localMemory.enabled = true;
@@ -751,7 +758,7 @@ describe("runAgentTextCommand", () => {
         modelCallCount += 1;
         if (input.purpose === "reviewer") {
           expect(input.tools).toEqual([]);
-          expect(input.toolOutputs.some((output) => output.name === "google_doc_read")).toBe(true);
+          expect(input.toolOutputs.some((output) => output.name === "google_drive_file_read")).toBe(true);
           return reviewerAcceptResponse();
         }
 
@@ -775,7 +782,7 @@ describe("runAgentTextCommand", () => {
             toolCalls: [
               {
                 id: "call_2",
-                name: "google_doc_read",
+                name: "google_drive_file_read",
                 input: { documentId: "doc_123" }
               }
             ]
@@ -815,6 +822,9 @@ describe("runAgentTextCommand", () => {
           ];
         },
         async googleDocRead() {
+          throw new Error("not used");
+        },
+        async googleDriveFileRead() {
           return {
             documentId: "doc_123",
             title: "Q3 Planning",

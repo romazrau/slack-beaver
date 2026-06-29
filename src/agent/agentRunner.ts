@@ -1074,7 +1074,8 @@ function isReadToolCall(toolCall: AgentToolCallRequest): boolean {
   return (
     toolCall.name === "local_file_read" ||
     toolCall.name === "gmail_read_message" ||
-    toolCall.name === "google_doc_read"
+    toolCall.name === "google_doc_read" ||
+    toolCall.name === "google_drive_file_read"
   );
 }
 
@@ -1552,7 +1553,7 @@ function buildPlannerInstructions(baseInstructions: string): string {
     "Choose one intent: answer_from_sources, ask_user, answer_without_tools, insufficient_context.",
     "For subjective or underspecified requests, set requiresClarification=true and provide one clarifyingQuestion.",
     "For retrieval requests, provide searches using only local_search, gmail_search, or google_drive_search.",
-    "Provide reads only when bounded content is likely needed, using local_file_read, gmail_read_message, or google_doc_read.",
+    "Provide reads only when bounded content is likely needed, using local_file_read, gmail_read_message, or google_drive_file_read. Use google_doc_read only when the source is known to be a native Google Docs document.",
     "A read step must reference a prior search by zero-based fromSearchIndex.",
     "Use this exact shape:",
     "{\"intent\":\"answer_from_sources|ask_user|answer_without_tools|insufficient_context\",\"requiresClarification\":false,\"clarifyingQuestion\":null,\"sources\":[\"local_files\"],\"searches\":[{\"tool\":\"local_search\",\"query\":\"query\"}],\"reads\":[],\"readPolicy\":{\"maxReads\":0,\"reason\":\"optional\"}}"

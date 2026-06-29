@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { isPathAllowed, readLocalTextFile, searchLocalFiles } from "../src/search/localSearch.js";
+import { buildSimplePdf } from "./pdfFixture.js";
 
 let tempDir: string;
 
@@ -79,6 +80,25 @@ describe("searchLocalFiles", () => {
     expect(results).toHaveLength(1);
   });
 
+  it("finds PDF files by extracted content", async () => {
+    await fs.writeFile(path.join(tempDir, "outline.pdf"), buildSimplePdf("Moonlit harbor PDF outline"), "binary");
+
+    const results = await searchLocalFiles("harbor", {
+      watchedFolders: [tempDir],
+      denylistFolders: [],
+      maxFileBytes: 4096,
+      maxResults: 10
+    });
+
+    expect(results).toEqual([
+      expect.objectContaining({
+        filename: "outline.pdf",
+        matchType: "content",
+        snippet: expect.stringContaining("Moonlit harbor PDF outline")
+      })
+    ]);
+  });
+
   it("skips unreadable files without failing the search", async () => {
     const unreadablePath = path.join(tempDir, "unreadable.md");
     await fs.writeFile(unreadablePath, "target hidden", "utf8");
@@ -131,6 +151,48 @@ describe("readLocalTextFile", () => {
       path: filePath,
       filename: "plan.md",
       content: "AAAAA",
+      truncated: true
+    });
+  });
+
+  it("reads bounded extracted text from an allowlisted PDF file", async () => {
+    const filePath = path.join(tempDir, "outline.pdf");
+    await fs.writeFile(filePath, buildSimplePdf("Chapter One local PDF content"), "binary");
+
+    const result = await readLocalTextFile(filePath, {
+      watchedFolders: [tempDir],
+      denylistFolders: [],
+      maxFileBytes: 4096,
+      maxResults: 10
+    });
+
+    expect(result).toMatchObject({
+      path: filePath,
+      filename: "outline.pdf",
+      content: expect.stringContaining("Chapter One local PDF content"),
+      truncated: false
+    });
+  });
+
+  it("reports truncated when bounded PDF extraction drops content", async () => {
+    const filePath = path.join(tempDir, "long-outline.pdf");
+    await fs.writeFile(filePath, buildSimplePdf("Chapter One local PDF content"), "binary");
+
+    const result = await readLocalTextFile(
+      filePath,
+      {
+        watchedFolders: [tempDir],
+        denylistFolders: [],
+        maxFileBytes: 4096,
+        maxResults: 10
+      },
+      7
+    );
+
+    expect(result).toMatchObject({
+      path: filePath,
+      filename: "long-outline.pdf",
+      content: "Chapter",
       truncated: true
     });
   });

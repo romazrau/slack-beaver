@@ -1,5 +1,6 @@
 import type { AppConfig } from "../config/config.js";
 import type { LocalMemoryStore } from "../memory/localMemory.js";
+import { extractPdfText } from "../pdf/pdfText.js";
 import {
   GOOGLE_ACCOUNT_EMAIL_SETTING_KEY,
   GOOGLE_GRANTED_SCOPES_SETTING_KEY,
@@ -13,6 +14,8 @@ import {
 
 const MAX_TEXT_CHARS = 4000;
 const DEFAULT_MAX_RESULTS = 5;
+const GOOGLE_DOC_MIME_TYPE = "application/vnd.google-apps.document";
+const PDF_MIME_TYPE = "application/pdf";
 
 export type GmailSearchResult = {
   messageId: string;
@@ -38,6 +41,8 @@ export type GoogleDoc = {
   documentId: string;
   title: string;
   content: string;
+  mimeType?: string;
+  truncated?: boolean;
 };
 
 export type GoogleWorkspaceClient = {
@@ -45,6 +50,7 @@ export type GoogleWorkspaceClient = {
   gmailReadMessage(messageId: string): Promise<GmailMessage>;
   googleDriveSearch(query: string): Promise<DriveSearchResult[]>;
   googleDocRead(documentId: string): Promise<GoogleDoc>;
+  googleDriveFileRead(documentId: string): Promise<GoogleDoc>;
 };
 
 export type GoogleWorkspaceClientOptions = {
@@ -113,6 +119,29 @@ export function createGoogleWorkspaceClient(input: {
     return (await response.json()) as T;
   }
 
+  async function googleFetchBytes(url: string): Promise<Uint8Array> {
+    let response = await fetchFn(url, {
+      headers: { authorization: `Bearer ${input.token.accessToken}` }
+    });
+
+    if (response.status === 401 && input.config && input.token.refreshToken) {
+      input.token = await refreshGoogleOAuthToken({
+        config: input.config,
+        token: input.token,
+        fetchFn
+      });
+      await saveGoogleOAuthToken(input.config.googleWorkspace.tokenPath, input.token);
+      response = await fetchFn(url, {
+        headers: { authorization: `Bearer ${input.token.accessToken}` }
+      });
+    }
+
+    if (!response.ok) {
+      throw new Error(`Google Workspace request failed: HTTP ${response.status}`);
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
   return {
     async gmailSearch(query) {
       const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
@@ -156,8 +185,40 @@ export function createGoogleWorkspaceClient(input: {
       return {
         documentId,
         title: doc.title ?? "Untitled document",
-        content: truncate(extractGoogleDocText(doc))
+        content: truncate(extractGoogleDocText(doc)),
+        mimeType: GOOGLE_DOC_MIME_TYPE
       };
+    },
+
+    async googleDriveFileRead(documentId) {
+      const metadata = await googleFetch<GoogleDriveApiFile>(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentId)}?fields=id,name,mimeType`
+      );
+      if (metadata.mimeType === GOOGLE_DOC_MIME_TYPE) {
+        const doc = await googleFetch<GoogleDocsApiDocument>(
+          `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}`
+        );
+        return {
+          documentId,
+          title: doc.title ?? metadata.name ?? "Untitled document",
+          content: truncate(extractGoogleDocText(doc)),
+          mimeType: metadata.mimeType
+        };
+      }
+      if (metadata.mimeType === PDF_MIME_TYPE) {
+        const pdfBytes = await googleFetchBytes(
+          `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentId)}?alt=media`
+        );
+        const extracted = await extractPdfText(pdfBytes, MAX_TEXT_CHARS);
+        return {
+          documentId,
+          title: metadata.name ?? "Untitled PDF",
+          content: extracted.content,
+          mimeType: metadata.mimeType,
+          truncated: extracted.truncated
+        };
+      }
+      throw new Error(`Google Drive MIME type is not readable: ${metadata.mimeType ?? "unknown"}`);
     }
   };
 }
@@ -185,6 +246,12 @@ type GoogleDocsApiDocument = {
       };
     }>;
   };
+};
+
+type GoogleDriveApiFile = {
+  id?: string;
+  name?: string;
+  mimeType?: string;
 };
 
 async function readGmailMetadata(
