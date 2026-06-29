@@ -29,6 +29,7 @@
 - `docs/repo-goal/10-search-read-summarize.md` now defines and records the implemented workflow for local and Google search, bounded read, summarization, citation, and required token access.
 - `docs/repo-goal/11-remote-task-dispatch.md` now defines and records the implemented first hybrid dispatch slice for Center Server-owned agent tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - `docs/repo-goal/12-local-agent-runtime-status.md` defines the runtime heartbeat and unavailable-agent guidance slice.
+- `docs/reproducible-demo/` now provides a dedicated repeatable POC demo plan covering local Slack agent operation, Center Server task dispatch, multi-agent comparison, fixture expectations, and evidence capture.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
 - `docs/memory/agent-conversation-context-and-tools.md` records the defaults, scope, implementation result, and validation for the conversation context and tool catalog phase.
@@ -85,6 +86,7 @@
 - Chrome UAT confirmed the current Chrome profile still blocks direct `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; Computer Use could inspect Finder but returned `cgWindowNotFound` for Chrome.
 - Chrome/Computer Use UAT reached Chrome, but this Chrome profile blocked direct `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; the server was verified independently through local HTTP requests.
 - Quick UAT startup scripts and guide were added; `tests/uatStartScript.test.ts` covers invalid mode and dry-run resume behavior.
+- Reproducible demo planning was added as documentation only; no application logic changed.
 
 ## Likely Next Work
 
@@ -96,3 +98,4 @@
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.
 - Keep Phase 5 local index cache deferred until v0 Slack-visible UAT and daemon/runbook gaps are closed.
 - Resolve Chrome profile localhost blocking if browser-visible Center Server UAT remains required, then decide whether to add Slack task creation or a polling loop for Remote Task Dispatch.
+- Add structured agent task result metadata before using the multi-agent comparison demo as a stronger comparable-output claim.
