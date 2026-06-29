@@ -23,7 +23,9 @@ realpath, and denylist checks.
 
 Do not let natural AI conversation infer or grant filesystem access. Folder
 scope changes must use explicit deterministic commands handled before the OpenAI
-agent path.
+agent path. The natural conversation instructions may describe these commands
+and may ask the user for `confirm folders add /absolute/path/to/folder`, but the
+permission change still happens only through deterministic command parsing.
 
 ## Slack Commands
 
@@ -32,6 +34,7 @@ Add deterministic App DM and slash-command support for:
 ```text
 folders list
 folders add /absolute/path/to/folder
+confirm folders add /absolute/path/to/folder
 folders remove /absolute/path/to/folder
 status
 status subscribe
@@ -44,6 +47,11 @@ status subscribe
 
 `folders add` validates and saves the real path to SQLite. Re-adding a disabled
 folder re-enables it. Re-adding an enabled folder is idempotent.
+
+`confirm folders add` uses the same deterministic validation and save path as
+`folders add`, but gives natural App DM conversation a safe confirmation phrase
+to ask for when the user has already named a concrete absolute path and clearly
+wants to grant access.
 
 `folders remove` disables only SQLite `allowed_folders`. It must not remove
 `WATCHED_FOLDERS`; env defaults remain controlled by local `.env`.
@@ -123,11 +131,16 @@ logged locally and treated as unavoidable delivery limitations for this phase.
 
 - A user can ask `folders list` and see the current readable local-file scope.
 - A user can add an absolute readable folder from Slack with `folders add`.
+- A user can explicitly confirm an agent-suggested folder grant with
+  `confirm folders add /absolute/path/to/folder`.
 - A user can remove a dynamically added folder from Slack with `folders remove`.
 - Env-provided default folders remain visible but cannot be removed from Slack.
 - Search and read tools use the merged env plus SQLite readable scope.
 - `status` shows available commands, readable scope, AI token setup, Google
   setup, and lifecycle notice target without exposing secrets.
+- Natural App DM conversation receives non-secret runtime status context so it
+  can answer questions about current folders, setup state, lifecycle notice
+  target, and available deterministic commands.
 - Startup sends an online notice to the resolved Slack target when available.
 - Graceful shutdown sends an offline notice to the resolved Slack target when
   available.
@@ -165,7 +178,7 @@ Manual UAT:
 Implemented.
 
 - Added deterministic Slack/App DM commands for `folders list`, `folders add`,
-  `folders remove`, `status`, and `status subscribe`.
+  `confirm folders add`, `folders remove`, `status`, and `status subscribe`.
 - Added `LOCAL_AGENT_STATUS_CHANNEL_ID` as an optional first-start lifecycle
   notice target.
 - Added runtime status snapshot formatting and best-effort startup/offline
@@ -174,6 +187,9 @@ Implemented.
   a fallback notice target.
 - Preserved the existing merged readable scope behavior for search/read tools:
   env `WATCHED_FOLDERS` plus SQLite `allowed_folders`.
+- Added natural conversation runtime context that mirrors startup/status notice
+  state without exposing secrets, so the agent can explain current readable
+  folders, setup status, and explicit confirmation commands.
 
 Automated validation passed:
 

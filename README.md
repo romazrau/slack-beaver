@@ -51,12 +51,15 @@ In the current architecture, Slack Socket Mode ingress runs inside the Local Age
 ```text
 folders list
 folders add /absolute/path/to/folder
+confirm folders add /absolute/path/to/folder
 folders remove /absolute/path/to/folder
 status
 status subscribe
 ```
 
 Slack-added folders are validated locally, saved in SQLite `allowed_folders`, and merged with `WATCHED_FOLDERS` for search and read tools. Env-provided folders remain controlled by `.env` and cannot be removed from Slack.
+
+Natural App DM conversation can explain these runtime commands and sees the same non-secret runtime context used by startup/status notices, including configured readable folders, AI agent token setup state, Google Workspace setup state, lifecycle notice target, and available commands. Folder access changes still require an explicit deterministic command, such as `folders add /absolute/path/to/folder`, or the explicit confirmation form `confirm folders add /absolute/path/to/folder`.
 
 Quick manual UAT startup:
 
@@ -166,6 +169,7 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - Denylist and max-file-size guards for local file access.
 - SQLite local memory for enabled folders, provider setup metadata, conversation turns, summaries, and tool-call summaries.
 - Best-effort Local Agent online/offline Slack lifecycle notices with env, subscribed, or recent-conversation targets.
+- Natural App DM runtime context that lets the agent explain current readable folders, setup status, and explicit folder-add confirmation commands without silently changing folder access.
 - Local-only OpenAI token setup through CLI; token-like Slack messages are refused.
 - Local-only OpenAI model discovery and switching through CLI.
 - Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.

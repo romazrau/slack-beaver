@@ -1,0 +1,21 @@
+{
+  "fixture": "Tagore bilingual reading index",
+  "author": {
+    "english": "Rabindranath Tagore",
+    "traditional_chinese": "泰戈爾"
+  },
+  "purpose": "Local search validation for bilingual literary queries.",
+  "entries": [
+    {
+      "work": "Gitanjali",
+      "work_zh": "吉檀迦利",
+      "query_targets": ["Tagore Gitanjali bilingual", "泰戈爾 吉檀迦利", "心靈無懼"]
+    },
+    {
+      "work": "Stray Birds",
+      "work_zh": "飛鳥集",
+      "query_targets": ["Tagore Stray Birds bilingual", "泰戈爾 飛鳥", "鳥兒 願自己是一朵雲"]
+    }
+  ],
+  "translation_note": "Chinese lines are fixture translations created for this repository."
+}

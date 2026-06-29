@@ -51,6 +51,7 @@
 - Source code now records a Local Agent runtime heartbeat in SQLite on startup and App Home opens, and Slack App Home displays the runtime as online, stale, or not seen yet.
 - Slack unavailable-agent guidance is centralized as a fixed response formatter, while the current architecture still requires the Local Agent process to be running for Socket Mode events to reach this repo.
 - Source code now includes Slack-native `folders list/add/remove`, `status`, and `status subscribe` commands for explicit dynamic readable-scope management.
+- App DM natural conversation instructions now explain those deterministic runtime commands and receive non-secret runtime status context, so the agent can say searchable paths can be added with `folders add /absolute/path/to/folder` or confirmed with `confirm folders add /absolute/path/to/folder` without silently granting folder access from natural language.
 - Local Agent startup and graceful shutdown now send best-effort online/offline Slack lifecycle notices to `LOCAL_AGENT_STATUS_CHANNEL_ID`, a subscribed Slack conversation, or a recent conversation fallback.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
@@ -93,6 +94,7 @@
 - Reproducible demo planning was added as documentation only; no application logic changed.
 - Dynamic readable-scope and runtime notice planning was added as documentation only; no application logic changed in this step.
 - Dynamic readable-scope and runtime notice implementation passed focused command, memory, Slack status, runtime notice, and config tests plus typecheck under Node.js `v22.23.1`.
+- Agent command regression validation now covers natural conversation guidance for explicit `folders add /absolute/path/to/folder` setup, `confirm folders add /absolute/path/to/folder`, and runtime status context injection.
 
 ## Likely Next Work
 

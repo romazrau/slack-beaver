@@ -142,6 +142,7 @@ export function formatStatusResponse(snapshot: RuntimeStatusSnapshot): string {
     "`ask <question>`",
     "`folders list`",
     "`folders add /absolute/path/to/folder`",
+    "`confirm folders add /absolute/path/to/folder`",
     "`folders remove /absolute/path/to/folder`",
     "`status`",
     "`status subscribe`"
@@ -160,7 +161,7 @@ export function formatRuntimeNotice(kind: RuntimeNoticeKind, snapshot: RuntimeSt
     formatFoldersResponse(snapshot),
     "",
     "*Available commands*",
-    "`find <query>`, `ask <question>`, `folders list`, `folders add /absolute/path`, `folders remove /absolute/path`, `status`, `status subscribe`"
+    "`find <query>`, `ask <question>`, `folders list`, `folders add /absolute/path`, `confirm folders add /absolute/path`, `folders remove /absolute/path`, `status`, `status subscribe`"
   ].join("\n");
 }
 

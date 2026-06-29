@@ -1,0 +1,39 @@
+Title: Rabindranath Tagore: Stray Birds Bilingual Search Notes
+Fixture tags: Tagore, 泰戈爾, Stray Birds, 飛鳥集, bilingual, 中英文版
+Source note: These are short fixture excerpts and local Chinese translations for search validation.
+
+Entry A
+English:
+"The world puts off its mask of vastness to its lover."
+
+中文:
+世界向它所愛的人卸下遼闊的面具。
+
+Search targets:
+- 泰戈爾 飛鳥
+- mask of vastness
+- 遼闊的面具
+
+Entry B
+English:
+"The bird wishes it were a cloud."
+
+中文:
+鳥兒願自己是一朵雲。
+
+Search targets:
+- bird wishes cloud
+- 鳥兒 雲
+- Stray Birds bilingual
+
+Entry C
+English:
+"The waterfall sings, I find my song, when I find my freedom."
+
+中文:
+瀑布歌唱：我在自由中找到自己的歌。
+
+Search targets:
+- waterfall freedom song
+- 自由中找到自己的歌
+- Tagore bilingual fixture

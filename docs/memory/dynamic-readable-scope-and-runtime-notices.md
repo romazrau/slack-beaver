@@ -26,13 +26,17 @@ Add deterministic Slack commands before the natural AI conversation route:
 ```text
 folders list
 folders add /absolute/path/to/folder
+confirm folders add /absolute/path/to/folder
 folders remove /absolute/path/to/folder
 status
 status subscribe
 ```
 
 Folder additions must reuse the existing local validation function. Natural AI
-conversation must not infer or grant filesystem access.
+conversation must not infer or grant filesystem access. Natural conversation
+may ask the user to confirm an already concrete folder grant with
+`confirm folders add /absolute/path/to/folder`; that command is still handled
+before OpenAI routing by deterministic code.
 
 For lifecycle notices, use the Slack target resolution order:
 
@@ -79,6 +83,9 @@ Implemented the selected approach.
 
 - Slack deterministic commands now handle readable-scope inspection and dynamic
   folder grants before natural AI conversation routing.
+- `confirm folders add /absolute/path/to/folder` now provides an explicit
+  confirmation path for agent-suggested folder grants while reusing the same
+  validation and SQLite save behavior as `folders add`.
 - `folders add` reuses local folder validation and saves real paths in SQLite
   `allowed_folders`.
 - `folders remove` disables only conversation-added folders and refuses to
@@ -90,10 +97,29 @@ Implemented the selected approach.
   conversation, or local logging when no Slack target exists.
 - `LOCAL_AGENT_STATUS_CHANNEL_ID` is documented as the optional first-start
   notice target.
+- Natural App DM conversation instructions now mention the deterministic
+  `folders list/add/remove`, `status`, and `status subscribe` commands so the
+  model can correctly say searchable/readable paths can be added through the
+  explicit `folders add /absolute/path/to/folder` command. The model still must
+  not silently grant folder access from natural language.
+- Natural App DM conversation now receives non-secret runtime status context,
+  including readable folder groups, AI agent token setup state, Google
+  Workspace setup state, lifecycle notice target, and available deterministic
+  commands.
+- Runtime status values that enter model instructions, including readable
+  folder paths and Slack notice target channel IDs, are JSON-stringified before
+  prompt insertion so filesystem/control characters cannot reshape the prompt
+  structure.
 
 Validation passed under Node.js `v22.23.1`:
 
 ```sh
 npm test -- tests/agentCommands.test.ts tests/localMemory.test.ts tests/slackApp.test.ts tests/runtimeStatus.test.ts tests/config.test.ts
 npm run typecheck
+```
+
+Additional regression validation:
+
+```sh
+npm test -- tests/agentCommands.test.ts
 ```

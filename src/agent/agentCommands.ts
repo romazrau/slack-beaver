@@ -165,6 +165,7 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
 type RuntimeCommand =
   | { type: "folders_list" }
   | { type: "folders_add"; folderPath: string }
+  | { type: "folders_confirm_add"; folderPath: string }
   | { type: "folders_remove"; folderPath: string }
   | { type: "status" }
   | { type: "status_subscribe" };
@@ -196,21 +197,13 @@ async function handleRuntimeCommand(
       return "Local memory is disabled, so Slack cannot save runtime folder or status settings.";
     }
 
-    if (command.type === "folders_add") {
-      const validation = await validateAllowedFolderInput(
-        command.folderPath,
-        input.config.localFiles.denylistFolders
-      );
-      if (!validation.ok) {
-        return validation.reason;
-      }
-      memoryStore.upsertAllowedFolder(validation.path);
-      return [
-        "Allowed folder saved for this Local Agent:",
-        `\`${escapeInlineCode(validation.path)}\``,
-        "",
-        "It is now part of the effective readable local-file scope."
-      ].join("\n");
+    if (command.type === "folders_add" || command.type === "folders_confirm_add") {
+      return await saveAllowedFolderFromCommand({
+        folderPath: command.folderPath,
+        config: input.config,
+        memoryStore,
+        confirmed: command.type === "folders_confirm_add"
+      });
     }
 
     if (command.type === "folders_remove") {
@@ -257,6 +250,13 @@ function parseRuntimeCommand(text: string): RuntimeCommand | undefined {
   if (normalizedCommand === "status" && normalizedSubcommand === "subscribe" && rest.length === 0) {
     return { type: "status_subscribe" };
   }
+  if (normalizedCommand === "confirm" && normalizedSubcommand === "folders") {
+    const [confirmAction, ...confirmRest] = rest;
+    if (confirmAction?.toLowerCase() === "add") {
+      return { type: "folders_confirm_add", folderPath: confirmRest.join(" ").trim() };
+    }
+    return undefined;
+  }
   if (normalizedCommand !== "folders") {
     return undefined;
   }
@@ -270,6 +270,30 @@ function parseRuntimeCommand(text: string): RuntimeCommand | undefined {
     return { type: "folders_remove", folderPath: rest.join(" ").trim() };
   }
   return undefined;
+}
+
+async function saveAllowedFolderFromCommand(input: {
+  folderPath: string;
+  config: AppConfig;
+  memoryStore: LocalMemoryStore;
+  confirmed: boolean;
+}): Promise<string> {
+  const validation = await validateAllowedFolderInput(
+    input.folderPath,
+    input.config.localFiles.denylistFolders
+  );
+  if (!validation.ok) {
+    return validation.reason;
+  }
+  input.memoryStore.upsertAllowedFolder(validation.path);
+  return [
+    input.confirmed
+      ? "Confirmed. Allowed folder saved for this Local Agent:"
+      : "Allowed folder saved for this Local Agent:",
+    `\`${escapeInlineCode(validation.path)}\``,
+    "",
+    "It is now part of the effective readable local-file scope."
+  ].join("\n");
 }
 
 async function resolveFolderPathForRemoval(folderPath: string): Promise<string> {

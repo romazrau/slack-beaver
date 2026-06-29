@@ -1,0 +1,7 @@
+id,author_or_type,language,keyword,search_phrase,note
+qk-001,Tagore,en,faith,Faith is the bird,public-domain attributed search phrase
+qk-002,Tagore,zh-Hant,信念,信念 光明 鳥,local Chinese fixture translation
+qk-003,Goethe,de,light,Mehr Licht,public-domain attributed search phrase
+qk-004,Goethe,zh-Hant,更多光,歌德 更多光,local Chinese fixture translation
+qk-005,synthetic,en,quiet courage,scattered maxims quiet courage,fictional maxim search target
+qk-006,synthetic,zh-Hant,星圖,名言佳句 星圖,fictional Chinese maxim search target

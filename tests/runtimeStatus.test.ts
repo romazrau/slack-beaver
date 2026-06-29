@@ -114,6 +114,7 @@ describe("runtime status notices", () => {
     expect(online).toContain("Google Workspace: connected locally");
     expect(online).toContain("Lifecycle notices: subscribed `D123`");
     expect(online).toContain("conversation-folder");
+    expect(online).toContain("confirm folders add /absolute/path");
     expect(offline).toContain("Local Agent is offline");
     expect(online).not.toContain("xoxb");
     expect(online).not.toContain("openai.key");
