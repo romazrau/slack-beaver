@@ -131,3 +131,47 @@ Focused validation passed with:
 npm test -- tests/config.test.ts tests/agentPlan.test.ts tests/agentEventLog.test.ts tests/agentCommands.test.ts
 npm run typecheck
 ```
+
+## Retrieval UAT Hardening Follow-up
+
+Implemented on 2026-06-29.
+
+The deterministic Executor now ranks typed read targets within already returned
+search results before choosing the file to read. This keeps `find <query>`
+deterministic while making typed `ask` plans prefer likely content files over
+README, index, docs memory, repo-goal, and runbook search-hint files. The
+planning-path penalty is intentionally narrow so ordinary content under
+`docs/`, such as API or user documentation, is not demoted just because it is in
+a docs folder.
+
+The legacy tool loop now has one bounded final-read allowance: when the model
+reaches the configured tool-turn boundary and asks for exactly one read target
+that was returned by an earlier search result, the runner executes that read
+and allows one more model/reviewer turn. The allowance does not accept arbitrary
+paths or unsearched read targets.
+
+If the model asks for more tool work after that allowance or after the configured
+tool-turn budget, the loop now returns the best partial result it already has,
+explicitly asks whether to continue or stop, and saves the pending tool calls in
+local memory `settings` with `pending_user_confirmation` status. Clear
+`continue`/`繼續` replies resume directly from that saved pending call with the
+previous response id and gathered tool outputs. Other natural-language replies
+are routed through a no-tool confirmation classifier that returns
+`continue`, `stop`, `unrelated`, or `unclear`; unrelated turns keep the pending
+state for up to five turns, unclear replies ask the user to choose, and stop
+replies clear the saved state.
+
+Typed reviewer `needs_more_context` decisions are treated as internal control
+signals. Because the typed workflow currently does not execute reviewer-requested
+follow-up plans, Slack receives a grounded insufficient-context answer instead
+of the reviewer instruction text.
+
+Focused validation passed with:
+
+```sh
+npm test -- tests/agentCommands.test.ts
+npm run typecheck
+```
+
+Additional review hardening on 2026-06-29 covered stale continuation risk and
+ordinary docs content ranking with the same focused validation commands.

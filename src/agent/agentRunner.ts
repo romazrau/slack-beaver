@@ -36,7 +36,7 @@ export type AgentModelInput = {
   tools: ReturnType<typeof listAgentToolDefinitions>;
   previousResponseId?: string;
   toolOutputs: AgentToolCallResult[];
-  purpose: "question" | "conversation" | "summary" | "reviewer" | "planner";
+  purpose: "question" | "conversation" | "summary" | "reviewer" | "planner" | "continuation_confirmation";
   conversationContext: AgentConversationContextItem[];
 };
 
@@ -62,12 +62,16 @@ export type AgentConversationContextItem =
 
 export type RunAgentQuestionInput = {
   question: string;
+  slackUserId?: string;
+  channelId?: string;
+  threadTs?: string;
   source: AgentCommandSource;
   config: AppConfig;
   memoryStore?: LocalMemoryStore;
   modelClient?: AgentModelClient;
   googleWorkspaceClient?: GoogleWorkspaceClient;
   observability?: AgentRunObservability;
+  preserveContinuationOnTerminal?: boolean;
 };
 
 export type RunAgentConversationInput = {
@@ -82,11 +86,43 @@ export type RunAgentConversationInput = {
   summarizerClient?: AgentModelClient;
   googleWorkspaceClient?: GoogleWorkspaceClient;
   observability?: AgentRunObservability;
+  preserveContinuationOnTerminal?: boolean;
 };
 
 export type AgentRunObservability = {
   slack?: AgentEventSlackMetadata;
 };
+
+type AgentContinuationIdentity = {
+  slackUserId: string;
+  channelId: string;
+  threadTs?: string;
+};
+
+type AgentContinuationState = {
+  version: 1;
+  status: "pending_user_confirmation";
+  question: string;
+  effectiveQuestion: string;
+  purpose: "question" | "conversation";
+  source: AgentCommandSource;
+  instructions: string;
+  partialAnswer: string;
+  confirmationPromptedAt: string;
+  ignoredTurnCount: number;
+  previousResponseId?: string;
+  toolOutputs: AgentToolCallResult[];
+  gatheredToolOutputs: AgentToolCallResult[];
+  executedToolCallSignatures: string[];
+  reviewerFeedback?: string;
+  reviewerRequestCount: number;
+  finalReadAllowanceUsed: boolean;
+  pendingToolCalls: AgentToolCallRequest[];
+};
+
+type ContinuationConfirmationDecision = "continue" | "stop" | "unrelated" | "unclear";
+
+const MAX_IGNORED_CONTINUATION_TURNS = 5;
 
 export async function runAgentQuestion(input: RunAgentQuestionInput): Promise<{
   answer: string;
@@ -116,7 +152,16 @@ export async function runAgentQuestion(input: RunAgentQuestionInput): Promise<{
     purpose: "question",
     instructions: buildAgentInstructions(),
     conversationContext: [],
-    observability: input.observability
+    observability: input.observability,
+    preserveContinuationOnTerminal: input.preserveContinuationOnTerminal,
+    continuationIdentity:
+      input.slackUserId && input.channelId
+        ? {
+            slackUserId: input.slackUserId,
+            channelId: input.channelId,
+            threadTs: input.threadTs
+          }
+        : undefined
   });
 }
 
@@ -156,7 +201,13 @@ export async function runAgentConversation(input: RunAgentConversationInput): Pr
       memoryStore: input.memoryStore
     }),
     conversationContext: context,
-    observability: input.observability
+    observability: input.observability,
+    preserveContinuationOnTerminal: input.preserveContinuationOnTerminal,
+    continuationIdentity: {
+      slackUserId: input.slackUserId,
+      channelId: input.channelId,
+      threadTs: input.threadTs
+    }
   });
 
   input.memoryStore.appendConversationTurn({
@@ -174,6 +225,208 @@ export async function runAgentConversation(input: RunAgentConversationInput): Pr
   return result;
 }
 
+export async function runAgentContinuation(input: {
+  slackUserId: string;
+  channelId: string;
+  threadTs?: string;
+  source: AgentCommandSource;
+  config: AppConfig;
+  memoryStore?: LocalMemoryStore;
+  modelClient?: AgentModelClient;
+  googleWorkspaceClient?: GoogleWorkspaceClient;
+  observability?: AgentRunObservability;
+}): Promise<{ answer: string; toolCallCount: number } | undefined> {
+  const state = loadAgentContinuationState(input.memoryStore, {
+    slackUserId: input.slackUserId,
+    channelId: input.channelId,
+    threadTs: input.threadTs
+  });
+  if (!state) {
+    return undefined;
+  }
+
+  if (!input.memoryStore?.getProviderConfig("openai")?.tokenConfigured) {
+    return { answer: formatOpenAiSetupGuidance(), toolCallCount: 0 };
+  }
+
+  let modelClient: AgentModelClient;
+  try {
+    modelClient = input.modelClient ?? (await createConfiguredOpenAiClient(input.config, input.memoryStore));
+  } catch (error) {
+    if (error instanceof OpenAiSetupRequiredError) {
+      return { answer: formatOpenAiSetupGuidance(), toolCallCount: 0 };
+    }
+    throw error;
+  }
+
+  return runAgentLoop({
+    question: state.question,
+    source: state.source,
+    config: input.config,
+    memoryStore: input.memoryStore,
+    modelClient,
+    googleWorkspaceClient: input.googleWorkspaceClient,
+    purpose: state.purpose,
+    instructions: state.instructions,
+    conversationContext: [],
+    observability: input.observability,
+    continuationIdentity: {
+      slackUserId: input.slackUserId,
+      channelId: input.channelId,
+      threadTs: input.threadTs
+    },
+    resumeState: state
+  });
+}
+
+export async function handleAgentContinuationReply(input: {
+  text: string;
+  slackUserId: string;
+  channelId: string;
+  threadTs?: string;
+  source: AgentCommandSource;
+  config: AppConfig;
+  memoryStore?: LocalMemoryStore;
+  modelClient?: AgentModelClient;
+  googleWorkspaceClient?: GoogleWorkspaceClient;
+  observability?: AgentRunObservability;
+}): Promise<
+  { answer: string; toolCallCount: number } | { continueNormal: true; preserveContinuationOnTerminal: boolean } | undefined
+> {
+  const identity = {
+    slackUserId: input.slackUserId,
+    channelId: input.channelId,
+    threadTs: input.threadTs
+  };
+  const state = loadAgentContinuationState(input.memoryStore, identity);
+  if (!state) {
+    return undefined;
+  }
+
+  const deterministicDecision = classifyDeterministicContinuationReply(input.text);
+  const decision =
+    deterministicDecision ??
+    (await classifyContinuationReply({
+      text: input.text,
+      state,
+      config: input.config,
+      memoryStore: input.memoryStore,
+      modelClient: input.modelClient
+    }));
+
+  if (decision === "continue") {
+    return runAgentContinuation(input);
+  }
+
+  if (decision === "stop") {
+    clearAgentContinuationState(input.memoryStore, identity);
+    return {
+      answer: "I stopped the unfinished tool run. Send a new request when you want to start again.",
+      toolCallCount: 0
+    };
+  }
+
+  if (decision === "unclear") {
+    return {
+      answer: "Do you want me to continue the unfinished tool run, stop it, or handle this as a new request?",
+      toolCallCount: 0
+    };
+  }
+
+  const updatedIgnoredTurnCount = state.ignoredTurnCount + 1;
+  if (updatedIgnoredTurnCount >= MAX_IGNORED_CONTINUATION_TURNS) {
+    clearAgentContinuationState(input.memoryStore, identity);
+    return { continueNormal: true, preserveContinuationOnTerminal: false };
+  }
+
+  saveAgentContinuationState(input.memoryStore, identity, {
+    ...state,
+    ignoredTurnCount: updatedIgnoredTurnCount
+  });
+  return { continueNormal: true, preserveContinuationOnTerminal: true };
+}
+
+function classifyDeterministicContinuationReply(text: string): ContinuationConfirmationDecision | undefined {
+  const normalized = text.trim().toLowerCase();
+  if (/^(continue|keep going|go on|resume|繼續|继续|接著|接續)$/.test(normalized)) {
+    return "continue";
+  }
+  if (/^(stop|cancel|never mind|nevermind|停止|取消|不用|不要|算了)$/.test(normalized)) {
+    return "stop";
+  }
+  return undefined;
+}
+
+async function classifyContinuationReply(input: {
+  text: string;
+  state: AgentContinuationState;
+  config: AppConfig;
+  memoryStore?: LocalMemoryStore;
+  modelClient?: AgentModelClient;
+}): Promise<ContinuationConfirmationDecision> {
+  if (!input.memoryStore?.getProviderConfig("openai")?.tokenConfigured) {
+    return "unrelated";
+  }
+
+  let modelClient: AgentModelClient;
+  try {
+    modelClient = input.modelClient ?? (await createConfiguredOpenAiClient(input.config, input.memoryStore));
+  } catch {
+    return "unrelated";
+  }
+
+  const response = await modelClient.createResponse({
+    question: [
+      "Original unfinished request:",
+      input.state.effectiveQuestion,
+      "",
+      "Partial answer shown to the user:",
+      truncateForContinuationClassifier(input.state.partialAnswer),
+      "",
+      "Latest user message:",
+      input.text
+    ].join("\n"),
+    instructions: buildContinuationConfirmationInstructions(),
+    tools: [],
+    previousResponseId: undefined,
+    toolOutputs: [],
+    purpose: "continuation_confirmation",
+    conversationContext: []
+  });
+
+  if (response.toolCalls.length > 0) {
+    return "unclear";
+  }
+
+  return parseContinuationConfirmationDecision(response.finalAnswer);
+}
+
+function parseContinuationConfirmationDecision(value: string | undefined): ContinuationConfirmationDecision {
+  if (!value) {
+    return "unclear";
+  }
+
+  try {
+    const parsed = JSON.parse(value) as { decision?: unknown };
+    if (
+      parsed.decision === "continue" ||
+      parsed.decision === "stop" ||
+      parsed.decision === "unrelated" ||
+      parsed.decision === "unclear"
+    ) {
+      return parsed.decision;
+    }
+  } catch {
+    return "unclear";
+  }
+
+  return "unclear";
+}
+
+function truncateForContinuationClassifier(value: string): string {
+  return value.length > 1200 ? `${value.slice(0, 1200)}...` : value;
+}
+
 async function runAgentLoop(input: {
   question: string;
   source: AgentCommandSource;
@@ -185,12 +438,17 @@ async function runAgentLoop(input: {
   instructions: string;
   conversationContext: AgentConversationContextItem[];
   observability?: AgentRunObservability;
+  continuationIdentity?: AgentContinuationIdentity;
+  resumeState?: AgentContinuationState;
+  preserveContinuationOnTerminal?: boolean;
 }): Promise<{ answer: string; toolCallCount: number }> {
   const traceId = randomUUID();
   const turnId = randomUUID();
   const conversationId = buildConversationId(input.observability?.slack);
-  const clarificationFollowUp = buildClarificationFollowUpQuestion(input.question, input.conversationContext);
-  const effectiveQuestion = clarificationFollowUp?.question ?? input.question;
+  const clarificationFollowUp = input.resumeState
+    ? undefined
+    : buildClarificationFollowUpQuestion(input.question, input.conversationContext);
+  const effectiveQuestion = input.resumeState?.effectiveQuestion ?? clarificationFollowUp?.question ?? input.question;
   await writeAgentEvent(input, traceId, turnId, conversationId, "chat", "slack_message_received", {
     direction: "input",
     kind: "slack_message",
@@ -240,7 +498,7 @@ async function runAgentLoop(input: {
     };
   }
 
-  if (input.config.ai.typedWorkflowEnabled) {
+  if (!input.resumeState && input.config.ai.typedWorkflowEnabled) {
     const planned = await tryRunTypedAgentWorkflow({
       ...input,
       traceId,
@@ -253,15 +511,37 @@ async function runAgentLoop(input: {
     }
   }
 
-  let previousResponseId: string | undefined;
-  let toolOutputs: AgentToolCallResult[] = [];
-  const gatheredToolOutputs: AgentToolCallResult[] = [];
+  let previousResponseId: string | undefined = input.resumeState?.previousResponseId;
+  let toolOutputs: AgentToolCallResult[] = input.resumeState?.toolOutputs ?? [];
+  const gatheredToolOutputs: AgentToolCallResult[] = input.resumeState?.gatheredToolOutputs ?? [];
   let toolCallCount = 0;
-  const executedToolCallSignatures = new Set<string>();
-  let reviewerFeedback: string | undefined;
-  let reviewerRequestCount = 0;
+  const executedToolCallSignatures = new Set<string>(input.resumeState?.executedToolCallSignatures ?? []);
+  let reviewerFeedback: string | undefined = input.resumeState?.reviewerFeedback;
+  let reviewerRequestCount = input.resumeState?.reviewerRequestCount ?? 0;
+  let finalReadAllowanceUsed = input.resumeState?.finalReadAllowanceUsed ?? false;
 
-  for (let turn = 0; turn <= input.config.ai.maxToolTurns + reviewerRequestCount; turn += 1) {
+  if (input.resumeState?.pendingToolCalls.length) {
+    const toolContext = buildToolExecutionContext(input);
+    toolOutputs = [];
+    for (const toolCall of input.resumeState.pendingToolCalls) {
+      executedToolCallSignatures.add(buildToolCallSignature(toolCall));
+      await traceAgentEvent(input, traceId, "tool_call_start", {
+        ...summarizeToolCall(toolCall),
+        continuedFromPause: true
+      });
+      const result = await runAgentToolCall(toolCall, toolContext);
+      await traceAgentEvent(input, traceId, "tool_call_result", summarizeToolOutput(result));
+      toolOutputs.push(result);
+      gatheredToolOutputs.push(result);
+      toolCallCount += 1;
+    }
+  }
+
+  for (
+    let turn = 0;
+    turn <= input.config.ai.maxToolTurns + reviewerRequestCount + (finalReadAllowanceUsed ? 1 : 0);
+    turn += 1
+  ) {
     const toolContext = buildToolExecutionContext(input);
     const response = await input.modelClient.createResponse({
       question: effectiveQuestion,
@@ -285,6 +565,7 @@ async function runAgentLoop(input: {
 
     if (response.finalAnswer && response.toolCalls.length === 0) {
       if (gatheredToolOutputs.length === 0) {
+        clearAgentContinuationStateForTerminal(input);
         return {
           answer: response.finalAnswer,
           toolCallCount
@@ -300,6 +581,7 @@ async function runAgentLoop(input: {
       await traceAgentEvent(input, traceId, "reviewer_decision", review);
 
       if (review.decision === "accept") {
+        clearAgentContinuationStateForTerminal(input);
         await traceAgentEvent(input, traceId, "final_answer", {
           reason: "reviewer_accept",
           toolCallCount
@@ -311,6 +593,7 @@ async function runAgentLoop(input: {
       }
 
       if (review.decision === "ask_user") {
+        clearAgentContinuationStateForTerminal(input);
         await traceAgentEvent(input, traceId, "final_answer", {
           reason: "reviewer_ask_user",
           toolCallCount
@@ -322,6 +605,7 @@ async function runAgentLoop(input: {
       }
 
       if (review.decision === "reject_insufficient_context") {
+        clearAgentContinuationStateForTerminal(input);
         await traceAgentEvent(input, traceId, "final_answer", {
           reason: "reviewer_reject_insufficient_context",
           toolCallCount
@@ -336,6 +620,7 @@ async function runAgentLoop(input: {
 
       reviewerRequestCount += 1;
       if (reviewerRequestCount > input.config.ai.maxToolTurns) {
+        clearAgentContinuationStateForTerminal(input);
         await traceAgentEvent(input, traceId, "final_answer", {
           reason: "reviewer_context_limit",
           toolCallCount
@@ -351,6 +636,7 @@ async function runAgentLoop(input: {
     }
 
     if (response.toolCalls.length === 0) {
+      clearAgentContinuationStateForTerminal(input);
       await traceAgentEvent(input, traceId, "final_answer", {
         reason: "no_tool_calls_no_final_answer",
         toolCallCount
@@ -362,6 +648,7 @@ async function runAgentLoop(input: {
     }
 
     if (response.toolCalls.some((toolCall) => executedToolCallSignatures.has(buildToolCallSignature(toolCall)))) {
+      clearAgentContinuationStateForTerminal(input);
       await traceAgentEvent(input, traceId, "fallback_answer", {
         reason: "repeated_tool_call",
         toolOutputs: toolOutputs.map((output) => summarizeToolOutput(output))
@@ -372,17 +659,64 @@ async function runAgentLoop(input: {
       };
     }
 
-    if (turn === input.config.ai.maxToolTurns + reviewerRequestCount) {
+    const toolTurnLimit = input.config.ai.maxToolTurns + reviewerRequestCount;
+    if (turn >= toolTurnLimit) {
+      const finalReadToolCalls = buildFinalReadAllowanceToolCalls(response.toolCalls, gatheredToolOutputs);
+      if (
+        turn === toolTurnLimit &&
+        !finalReadAllowanceUsed &&
+        finalReadToolCalls.length > 0 &&
+        finalReadToolCalls.length === response.toolCalls.length
+      ) {
+        finalReadAllowanceUsed = true;
+        toolOutputs = [];
+        for (const toolCall of finalReadToolCalls) {
+          executedToolCallSignatures.add(buildToolCallSignature(toolCall));
+          await traceAgentEvent(input, traceId, "tool_call_start", {
+            ...summarizeToolCall(toolCall),
+            finalReadAllowance: true
+          });
+          const result = await runAgentToolCall(toolCall, toolContext);
+          await traceAgentEvent(input, traceId, "tool_call_result", summarizeToolOutput(result));
+          toolOutputs.push(result);
+          gatheredToolOutputs.push(result);
+          toolCallCount += 1;
+        }
+        continue;
+      }
+
       if (toolOutputs.some((output) => output.resultCount > 0)) {
+        const fallbackAnswer = buildToolOutputFallbackAnswer(gatheredToolOutputs, effectiveQuestion);
+        const continuationSaved = saveAgentContinuationState(input.memoryStore, input.continuationIdentity, {
+          version: 1,
+          status: "pending_user_confirmation",
+          question: input.question,
+          effectiveQuestion,
+          purpose: input.purpose,
+          source: input.source,
+          instructions: input.instructions,
+          partialAnswer: fallbackAnswer,
+          confirmationPromptedAt: new Date().toISOString(),
+          ignoredTurnCount: 0,
+          previousResponseId,
+          toolOutputs,
+          gatheredToolOutputs,
+          executedToolCallSignatures: Array.from(executedToolCallSignatures),
+          reviewerFeedback,
+          reviewerRequestCount,
+          finalReadAllowanceUsed,
+          pendingToolCalls: response.toolCalls
+        });
         await traceAgentEvent(input, traceId, "fallback_answer", {
-          reason: "max_tool_turns",
+          reason: "max_tool_turns_paused_for_continuation",
           toolOutputs: toolOutputs.map((output) => summarizeToolOutput(output))
         });
         return {
-          answer: buildToolOutputFallbackAnswer(toolOutputs, effectiveQuestion),
+          answer: continuationSaved ? buildContinuationPromptAnswer(fallbackAnswer) : fallbackAnswer,
           toolCallCount
         };
       }
+      clearAgentContinuationStateForTerminal(input);
       throw new Error("Agent exceeded the maximum tool-call turns.");
     }
 
@@ -554,9 +888,13 @@ async function tryRunTypedAgentWorkflow(input: {
     );
   }
   if (review.decision === "needs_more_context") {
+    await traceAgentEvent(input, input.traceId, "final_answer", {
+      reason: "typed_reviewer_needs_more_context_not_executed",
+      toolCallCount: toolOutputs.length
+    });
     return logTypedWorkflowReply(
       input,
-      review.message ?? "I need more specific context before I can answer well.",
+      "I found some context, but the configured context was not enough to produce a grounded answer.",
       toolOutputs.length
     );
   }
@@ -711,6 +1049,210 @@ function parseReviewerDecision(value: string | undefined): ReviewerDecision {
   return { decision: "reject_insufficient_context" };
 }
 
+function buildFinalReadAllowanceToolCalls(
+  toolCalls: AgentToolCallRequest[],
+  gatheredToolOutputs: AgentToolCallResult[]
+): AgentToolCallRequest[] {
+  if (toolCalls.length !== 1) {
+    return [];
+  }
+
+  const [toolCall] = toolCalls;
+  if (!isReadToolCall(toolCall)) {
+    return [];
+  }
+
+  const target = extractReadToolTarget(toolCall);
+  if (!target || !wasTargetReturnedBySearch(target, gatheredToolOutputs)) {
+    return [];
+  }
+
+  return [toolCall];
+}
+
+function isReadToolCall(toolCall: AgentToolCallRequest): boolean {
+  return (
+    toolCall.name === "local_file_read" ||
+    toolCall.name === "gmail_read_message" ||
+    toolCall.name === "google_doc_read"
+  );
+}
+
+function extractReadToolTarget(toolCall: AgentToolCallRequest): string | undefined {
+  if (!toolCall.input || typeof toolCall.input !== "object" || Array.isArray(toolCall.input)) {
+    return undefined;
+  }
+
+  const input = toolCall.input as Record<string, unknown>;
+  const field =
+    toolCall.name === "local_file_read"
+      ? "path"
+      : toolCall.name === "gmail_read_message"
+        ? "messageId"
+        : "documentId";
+  const value = input[field];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function wasTargetReturnedBySearch(target: string, gatheredToolOutputs: AgentToolCallResult[]): boolean {
+  return gatheredToolOutputs.some((output) => {
+    if (output.name !== "local_search" && output.name !== "gmail_search" && output.name !== "google_drive_search") {
+      return false;
+    }
+    return extractSearchTargets(output).has(target);
+  });
+}
+
+function extractSearchTargets(output: AgentToolCallResult): Set<string> {
+  const targets = new Set<string>();
+  try {
+    const parsed = JSON.parse(output.output) as { results?: unknown };
+    if (!Array.isArray(parsed.results)) {
+      return targets;
+    }
+    for (const result of parsed.results) {
+      if (!result || typeof result !== "object" || Array.isArray(result)) {
+        continue;
+      }
+      const fields = result as Record<string, unknown>;
+      for (const key of ["path", "messageId", "documentId"]) {
+        const value = fields[key];
+        if (typeof value === "string" && value.trim()) {
+          targets.add(value.trim());
+        }
+      }
+    }
+  } catch {
+    return targets;
+  }
+  return targets;
+}
+
+function saveAgentContinuationState(
+  memoryStore: LocalMemoryStore | undefined,
+  identity: AgentContinuationIdentity | undefined,
+  state: AgentContinuationState
+): boolean {
+  if (!memoryStore || !identity) {
+    return false;
+  }
+
+  memoryStore.setSetting(buildAgentContinuationSettingKey(identity), JSON.stringify(state));
+  return true;
+}
+
+function loadAgentContinuationState(
+  memoryStore: LocalMemoryStore | undefined,
+  identity: AgentContinuationIdentity
+): AgentContinuationState | undefined {
+  const raw = memoryStore?.getSetting(buildAgentContinuationSettingKey(identity))?.value;
+  if (!raw) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<AgentContinuationState>;
+    if (
+      parsed.version !== 1 ||
+      parsed.status !== "pending_user_confirmation" ||
+      typeof parsed.question !== "string" ||
+      typeof parsed.effectiveQuestion !== "string" ||
+      (parsed.purpose !== "question" && parsed.purpose !== "conversation") ||
+      (parsed.source !== "slash_command" && parsed.source !== "app_home_message") ||
+      typeof parsed.instructions !== "string" ||
+      typeof parsed.partialAnswer !== "string" ||
+      typeof parsed.confirmationPromptedAt !== "string" ||
+      typeof parsed.ignoredTurnCount !== "number" ||
+      !Array.isArray(parsed.toolOutputs) ||
+      !Array.isArray(parsed.gatheredToolOutputs) ||
+      !Array.isArray(parsed.executedToolCallSignatures) ||
+      typeof parsed.reviewerRequestCount !== "number" ||
+      typeof parsed.finalReadAllowanceUsed !== "boolean" ||
+      !Array.isArray(parsed.pendingToolCalls)
+    ) {
+      return undefined;
+    }
+
+    return {
+      version: 1,
+      status: "pending_user_confirmation",
+      question: parsed.question,
+      effectiveQuestion: parsed.effectiveQuestion,
+      purpose: parsed.purpose,
+      source: parsed.source,
+      instructions: parsed.instructions,
+      partialAnswer: parsed.partialAnswer,
+      confirmationPromptedAt: parsed.confirmationPromptedAt,
+      ignoredTurnCount: parsed.ignoredTurnCount,
+      previousResponseId: typeof parsed.previousResponseId === "string" ? parsed.previousResponseId : undefined,
+      toolOutputs: parsed.toolOutputs.filter(isAgentToolCallResult),
+      gatheredToolOutputs: parsed.gatheredToolOutputs.filter(isAgentToolCallResult),
+      executedToolCallSignatures: parsed.executedToolCallSignatures.filter(
+        (value): value is string => typeof value === "string"
+      ),
+      reviewerFeedback: typeof parsed.reviewerFeedback === "string" ? parsed.reviewerFeedback : undefined,
+      reviewerRequestCount: parsed.reviewerRequestCount,
+      finalReadAllowanceUsed: parsed.finalReadAllowanceUsed,
+      pendingToolCalls: parsed.pendingToolCalls.filter(isAgentToolCallRequest)
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function clearAgentContinuationState(
+  memoryStore: LocalMemoryStore | undefined,
+  identity: AgentContinuationIdentity | undefined
+): void {
+  if (!memoryStore || !identity) {
+    return;
+  }
+
+  memoryStore.deleteSetting(buildAgentContinuationSettingKey(identity));
+}
+
+function clearAgentContinuationStateForTerminal(input: {
+  memoryStore?: LocalMemoryStore;
+  continuationIdentity?: AgentContinuationIdentity;
+  preserveContinuationOnTerminal?: boolean;
+}): void {
+  if (input.preserveContinuationOnTerminal) {
+    return;
+  }
+
+  clearAgentContinuationState(input.memoryStore, input.continuationIdentity);
+}
+
+function buildAgentContinuationSettingKey(identity: AgentContinuationIdentity): string {
+  return [
+    "agent.continuation",
+    encodeURIComponent(identity.slackUserId),
+    encodeURIComponent(identity.channelId),
+    encodeURIComponent(identity.threadTs ?? "")
+  ].join(":");
+}
+
+function isAgentToolCallRequest(value: unknown): value is AgentToolCallRequest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value as Partial<AgentToolCallRequest>;
+  return typeof candidate.id === "string" && typeof candidate.name === "string" && "input" in candidate;
+}
+
+function isAgentToolCallResult(value: unknown): value is AgentToolCallResult {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const candidate = value as Partial<AgentToolCallResult>;
+  return (
+    typeof candidate.callId === "string" &&
+    typeof candidate.name === "string" &&
+    typeof candidate.output === "string" &&
+    typeof candidate.resultCount === "number"
+  );
+}
+
 function buildToolCallSignature(toolCall: AgentToolCallRequest): string {
   return JSON.stringify({
     name: toolCall.name,
@@ -732,6 +1274,14 @@ function normalizeToolCallInput(input: unknown): unknown {
   }
 
   return input;
+}
+
+function buildContinuationPromptAnswer(partialAnswer: string): string {
+  return [
+    partialAnswer,
+    "",
+    "I paused before running more tool calls. Do you want me to continue? Reply `continue` or `繼續` to keep going, or `stop` to end this unfinished run."
+  ].join("\n");
 }
 
 function buildToolOutputFallbackAnswer(toolOutputs: AgentToolCallResult[], question?: string): string {
@@ -1033,6 +1583,20 @@ function buildReviewerInstructions(draftAnswer: string): string {
     "Return only JSON with this shape: {\"decision\":\"accept|needs_more_context|ask_user|reject_insufficient_context\",\"message\":\"optional short message\"}.",
     "Draft answer to review:",
     draftAnswer
+  ].join("\n");
+}
+
+function buildContinuationConfirmationInstructions(): string {
+  return [
+    "You are Slack Beaver continuation router.",
+    "The user was explicitly asked whether to continue an unfinished tool run.",
+    "Classify only the latest user message.",
+    "Return only JSON with this exact shape: {\"decision\":\"continue|stop|unrelated|unclear\",\"reason\":\"short reason\"}.",
+    "Use continue when the user clearly wants the unfinished work to keep running.",
+    "Use stop when the user clearly declines, cancels, or says the unfinished work is no longer needed.",
+    "Use unrelated when the user is asking a different question or starting a different task.",
+    "Use unclear when the message could plausibly refer to the unfinished work but does not clearly continue or stop it.",
+    "Do not call tools. Do not answer the user's request."
   ].join("\n");
 }
 

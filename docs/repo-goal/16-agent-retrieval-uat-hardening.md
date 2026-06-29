@@ -177,3 +177,37 @@ Then test from Slack App DM with Chrome and inspect:
 tail -n 120 logs/agent-traces/YYYY-MM-DD.jsonl
 tail -n 25 logs/audit.jsonl
 ```
+
+## Implementation Result
+
+Implemented on 2026-06-29.
+
+Automated hardening now covers the main code-level UAT gaps:
+
+- The legacy tool loop can execute one final bounded read when the requested
+  read target came from an earlier search result.
+- If the model requests more tool calls after the configured budget or final
+  read allowance, Slack receives partial results plus an explicit prompt asking
+  whether to continue or stop. The pending tool calls, previous response id, and
+  gathered outputs are saved in local memory with `pending_user_confirmation`
+  status so continuation resumes from that point only after user confirmation.
+- Natural-language replies to a pending continuation are classified by a no-tool
+  confirmation role as `continue`, `stop`, `unrelated`, or `unclear`. Unrelated
+  messages keep the pending state for up to five turns, unclear replies ask the
+  user to choose, and stop replies clear the saved state.
+- The typed deterministic executor ranks read targets within search results so
+  likely content files are read before README, index, docs memory, repo-goal,
+  and runbook search-hint files without demoting ordinary `docs/` content files.
+- Typed reviewer `needs_more_context` decisions are no longer returned directly
+  to Slack; when the follow-up cannot be executed in the typed workflow, the
+  user receives an insufficient-context answer.
+
+Validated with:
+
+```sh
+npm test -- tests/agentCommands.test.ts
+npm run typecheck
+```
+
+Live Slack UAT remains the next validation step for the exact Chrome/Slack
+cases listed above.

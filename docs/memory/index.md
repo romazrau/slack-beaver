@@ -29,5 +29,5 @@ This directory records project decisions, implementation notes, progress, and ne
 - `slack-openai-uat.md`: Live Slack/OpenAI UAT results, repeated tool-call finding, deterministic runner fallback, and fixture-scope note.
 - `slack-app-setup-and-uat.md`: Real Slack app setup, secret handling, local daemon operation, runtime fix, and live UAT results for Slack Local File Search v0.
 - `slack-app-home-chat.md`: Decision and implementation notes for Slack-native App Home and Messages tab chat.
-- `typed-agent-workflow-and-local-observability.md`: POC decision to keep Chat Orchestrator, Planner, deterministic Executor, and Reviewer in one Local Agent process while adding structured local event logs.
+- `typed-agent-workflow-and-local-observability.md`: POC decision to keep Chat Orchestrator, Planner, deterministic Executor, and Reviewer in one Local Agent process while adding structured local event logs and retrieval UAT hardening for bounded final reads, confirmation-gated continuation state, content-file prioritization, and reviewer feedback containment.
 - `v0-facts-hardening-results.md`: Results from executing the v0 facts and hardening phase, including fixture UAT, coverage gaps, daemon finding, and Phase 5 deferral.

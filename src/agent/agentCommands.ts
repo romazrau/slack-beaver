@@ -19,7 +19,12 @@ import {
 } from "../slack/runtimeStatus.js";
 import { looksLikeAiToken } from "../setup/secretSetup.js";
 import { validateAllowedFolderInput } from "../setup/folderSetup.js";
-import { runAgentConversation, runAgentQuestion, type AgentModelClient } from "./agentRunner.js";
+import {
+  handleAgentContinuationReply,
+  runAgentConversation,
+  runAgentQuestion,
+  type AgentModelClient
+} from "./agentRunner.js";
 import { runLocalSearchTool } from "./toolRegistry.js";
 
 export type AgentCommandSource = "slash_command" | "app_home_message";
@@ -56,14 +61,60 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
   const memoryStore = input.config.localMemory.enabled
     ? new LocalMemoryStore(input.config.localMemory.dbPath)
     : undefined;
+
   const parsed = parseAgentCommand(input.text);
   const shouldRunNaturalConversation = parsed.type === "invalid" && input.source === "app_home_message";
-  if (parsed.type === "invalid" && !shouldRunNaturalConversation) {
-    memoryStore?.close();
-    return formatInvalidCommandReason(parsed.reason, input.source);
-  }
+  let preserveContinuationOnTerminal = false;
 
   try {
+    if (memoryStore) {
+      const memoryFolders = memoryStore.listEnabledAllowedFolderPaths();
+      const watchedFolders = mergeUniquePaths(input.config.localFiles.watchedFolders, memoryFolders);
+      const continuationConfig = {
+        ...input.config,
+        localFiles: {
+          ...input.config.localFiles,
+          watchedFolders
+        }
+      };
+      const continuationReply = await handleAgentContinuationReply({
+        text: input.text,
+        slackUserId: input.slackUserId,
+        channelId: input.channelId,
+        threadTs: input.threadTs,
+        source: input.source,
+        config: continuationConfig,
+        memoryStore,
+        modelClient: input.modelClient,
+        googleWorkspaceClient: input.googleWorkspaceClient,
+        observability: {
+          slack: {
+            userId: input.slackUserId,
+            channelId: input.channelId,
+            threadTs: input.threadTs
+          }
+        }
+      });
+      if (continuationReply && "continueNormal" in continuationReply && continuationReply.continueNormal === true) {
+        preserveContinuationOnTerminal = continuationReply.preserveContinuationOnTerminal;
+      } else if (continuationReply && "answer" in continuationReply) {
+        await writeAuditLog(input.config.auditLogPath, {
+          timestamp: new Date().toISOString(),
+          slackUserId: input.slackUserId,
+          channelId: input.channelId,
+          query: input.text,
+          resultCount: continuationReply.toolCallCount,
+          status: "success",
+          source: input.source
+        });
+        return continuationReply.answer;
+      }
+    }
+
+    if (parsed.type === "invalid" && !shouldRunNaturalConversation) {
+      return formatInvalidCommandReason(parsed.reason, input.source);
+    }
+
     const memoryFolders = memoryStore?.listEnabledAllowedFolderPaths() ?? [];
     const watchedFolders = mergeUniquePaths(input.config.localFiles.watchedFolders, memoryFolders);
     if (!shouldRunNaturalConversation && watchedFolders.length === 0) {
@@ -90,6 +141,7 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
         modelClient: input.modelClient,
         summarizerClient: input.summarizerClient,
         googleWorkspaceClient: input.googleWorkspaceClient,
+        preserveContinuationOnTerminal,
         observability: {
           slack: {
             userId: input.slackUserId,
@@ -113,11 +165,15 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
     if (parsed.type === "ask") {
       const answer = await runAgentQuestion({
         question: parsed.question,
+        slackUserId: input.slackUserId,
+        channelId: input.channelId,
+        threadTs: input.threadTs,
         source: input.source,
         config,
         memoryStore,
         modelClient: input.modelClient,
         googleWorkspaceClient: input.googleWorkspaceClient,
+        preserveContinuationOnTerminal,
         observability: {
           slack: {
             userId: input.slackUserId,

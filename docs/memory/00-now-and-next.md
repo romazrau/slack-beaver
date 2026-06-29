@@ -60,6 +60,7 @@
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
 - The guarded OpenAI runner now asks a focused clarification for vague mood-based short-passage requests before search, carries short clarification follow-ups such as `安靜` back into the original request, routes retrieval draft answers through a no-tool reviewer role, and lets the reviewer accept, request more context, ask the user, or reject insufficient context.
 - The guarded OpenAI runner now has a typed workflow path with planner JSON validation, deterministic plan execution through Tool Registry, an evidence ledger, reviewer evaluation over plan/evidence/draft, and fallback to the legacy loop when planner output is invalid or disabled.
+- Agent retrieval UAT hardening now lets the legacy loop perform one bounded final read from a prior search result, pauses over-budget follow-up tool calls with partial results plus an explicit continue/stop confirmation prompt backed by saved continuation state, uses a no-tool confirmation classifier for natural-language replies, makes typed reads prefer content files over README/planning search-hint files without demoting ordinary `docs/` content, and converts unexecuted typed reviewer `needs_more_context` decisions into insufficient-context answers instead of Slack-visible reviewer instructions.
 - Agent loop trace logs now write ignored JSONL files under `logs/agent-traces/` with effective questions, concrete tool-call inputs, bounded result summaries, fallback reasons, and reviewer decisions for local debugging.
 - Agent workflow event logs now write ignored JSONL files under `logs/agent-events/` with local time, `traceId`, `turnId`, `conversationId`, Slack metadata when available, planner/executor/reviewer events, and redacted or bounded IO summaries.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
@@ -106,6 +107,7 @@
 - Agent retrieval reviewer validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering ambiguity-first clarification, Chinese clarification follow-up handling, reviewer acceptance, reviewer-requested extra context, reviewer rejection, trace logging, audit safety, and deterministic `find` compatibility.
 - Typed agent workflow and local observability validation passed focused config, plan validation, event log, and agent command tests plus typecheck under Node.js `v22.23.1`.
 - Chrome live Slack UAT for retrieval reviewer follow-up confirmed clarification and trace logging, but found remaining gaps in tool-turn budgeting, reviewer `needs_more_context` handling, and content-file prioritization; the next acceptance criteria are recorded in `docs/repo-goal/16-agent-retrieval-uat-hardening.md`.
+- Agent retrieval UAT hardening automated validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering final boundary reads, continuation from a saved pending tool call, confirmation classifier continue/stop/unrelated/unclear handling, five unrelated-turn cleanup, typed content-file read prioritization, ordinary `docs/` content handling, quiet passage prioritization, and reviewer `needs_more_context` containment.
 
 ## Likely Next Work
 
@@ -121,4 +123,4 @@
 - Run live Slack UAT for `folders list/add/remove`, `status subscribe`, restart online notice, and graceful-shutdown offline notice.
 - Run live Slack/OpenAI UAT for the agent retrieval reviewer flow, including vague short-passage clarification and reviewer-quality grounded answers.
 - Run live Slack/OpenAI UAT for typed planner/executor/reviewer answers and verify `logs/agent-events/YYYY-MM-DD.jsonl` correlation from a Slack screenshot timestamp.
-- Implement the Agent Retrieval UAT Hardening plan so quiet short-passage and Priya TODO `ask` flows complete search/read/review instead of stopping at fallback or reviewer instructions.
+- Re-run live Slack UAT for the Agent Retrieval UAT Hardening cases and compare Slack-visible replies with `logs/agent-traces/YYYY-MM-DD.jsonl` and `logs/agent-events/YYYY-MM-DD.jsonl`.

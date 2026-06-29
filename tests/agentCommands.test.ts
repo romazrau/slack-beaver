@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAgentTextCommand } from "../src/agent/agentCommands.js";
 import type { AgentModelClient } from "../src/agent/agentRunner.js";
 import type { AppConfig } from "../src/config/config.js";
@@ -1445,6 +1445,909 @@ describe("runAgentTextCommand", () => {
       source: "app_home_message"
     });
     expect(auditLine).not.toContain("update the rollout runbook");
+  });
+
+  it("allows one final read from a previous search result at the tool-turn boundary", async () => {
+    const filePath = path.join(tempDir, "tasks.md");
+    await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          expect(input.toolOutputs.some((output) => output.name === "local_file_read")).toBe(true);
+          return reviewerAcceptResponse();
+        }
+
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "local_search",
+                input: { query: "TODO owner Priya" }
+              }
+            ]
+          };
+        }
+
+        if (mainCallCount === 2) {
+          expect(input.toolOutputs[0]?.output).toContain("tasks.md");
+          return {
+            responseId: "resp_2",
+            toolCalls: [
+              {
+                id: "call_2",
+                name: "local_file_read",
+                input: { path: filePath }
+              }
+            ]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.name).toBe("local_file_read");
+        expect(input.toolOutputs[0]?.output).toContain("update the rollout runbook");
+        return {
+          responseId: "resp_3",
+          finalAnswer: "The Priya TODO is to update the rollout runbook. Source: tasks.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(mainCallCount).toBe(3);
+    expect(response).toContain("update the rollout runbook");
+    expect(response).not.toContain("I found these local file matches");
+  });
+
+  it("pauses instead of running extra tool calls after the final read allowance and can continue from the pending call", async () => {
+    const filePath = path.join(tempDir, "tasks.md");
+    const detailsPath = path.join(tempDir, "details.md");
+    await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
+    await fs.writeFile(detailsPath, "Runbook detail: publish the rollout checklist after QA.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          return reviewerAcceptResponse();
+        }
+
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "local_search",
+                input: { query: "TODO owner Priya" }
+              }
+            ]
+          };
+        }
+
+        if (mainCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [
+              {
+                id: "call_2",
+                name: "local_file_read",
+                input: { path: filePath }
+              }
+            ]
+          };
+        }
+
+        if (mainCallCount === 3) {
+          expect(input.toolOutputs[0]?.name).toBe("local_file_read");
+          return {
+            responseId: "resp_3",
+            toolCalls: [
+              {
+                id: "call_3",
+                name: "local_search",
+                input: { query: "Runbook detail" }
+              }
+            ]
+          };
+        }
+
+        expect(input.previousResponseId).toBe("resp_3");
+        expect(input.toolOutputs[0]?.name).toBe("local_search");
+        expect(input.toolOutputs[0]?.output).toContain("details.md");
+        return {
+          responseId: "resp_4",
+          finalAnswer: "Priya owns updating the rollout runbook; the detail says to publish the checklist after QA.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const firstResponse = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya, and include rollout details?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(mainCallCount).toBe(3);
+    expect(firstResponse).toContain("TODO owner Priya");
+    expect(firstResponse).toContain("Reply `continue`");
+    expect(firstResponse).toContain("`stop`");
+    expect(firstResponse).not.toContain("details.md");
+
+    const closeSpy = vi.spyOn(LocalMemoryStore.prototype, "close");
+    let continuedResponse = "";
+    try {
+      continuedResponse = await runAgentTextCommand({
+        text: "continue",
+        slackUserId: "U123",
+        channelId: "D123",
+        source: "app_home_message",
+        config,
+        modelClient
+      });
+      expect(closeSpy).toHaveBeenCalled();
+    } finally {
+      closeSpy.mockRestore();
+    }
+
+    expect(mainCallCount).toBe(4);
+    expect(continuedResponse).toContain("publish the checklist after QA");
+  });
+
+  it("uses a confirmation classifier to keep pending continuation across unrelated natural messages", async () => {
+    const filePath = path.join(tempDir, "tasks.md");
+    const detailsPath = path.join(tempDir, "details.md");
+    await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
+    await fs.writeFile(detailsPath, "Runbook detail: publish the rollout checklist after QA.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+    let classifierCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "continuation_confirmation") {
+          classifierCallCount += 1;
+          expect(input.tools).toHaveLength(0);
+          expect(input.question).toContain("Latest user message:");
+          return {
+            responseId: "confirm_1",
+            finalAnswer: JSON.stringify({ decision: "unrelated", reason: "new request" }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          return reviewerAcceptResponse();
+        }
+
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [{ id: "call_1", name: "local_search", input: { query: "TODO owner Priya" } }]
+          };
+        }
+
+        if (mainCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [{ id: "call_2", name: "local_file_read", input: { path: filePath } }]
+          };
+        }
+
+        if (mainCallCount === 3) {
+          return {
+            responseId: "resp_3",
+            toolCalls: [{ id: "call_3", name: "local_search", input: { query: "Runbook detail" } }]
+          };
+        }
+
+        if (mainCallCount === 4) {
+          expect(input.purpose).toBe("conversation");
+          expect(input.toolOutputs).toHaveLength(0);
+          return {
+            responseId: "resp_unrelated",
+            finalAnswer: "The unrelated answer.",
+            toolCalls: []
+          };
+        }
+
+        expect(input.previousResponseId).toBe("resp_3");
+        expect(input.toolOutputs[0]?.name).toBe("local_search");
+        return {
+          responseId: "resp_5",
+          finalAnswer: "Continued result includes publish the checklist after QA.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const firstResponse = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya, and include rollout details?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+    expect(firstResponse).toContain("Reply `continue`");
+
+    const unrelatedResponse = await runAgentTextCommand({
+      text: "What can you do?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+    expect(unrelatedResponse).toBe("The unrelated answer.");
+
+    const continuedResponse = await runAgentTextCommand({
+      text: "continue",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(classifierCallCount).toBe(1);
+    expect(continuedResponse).toContain("publish the checklist after QA");
+  });
+
+  it("clears pending continuation when the user tells the confirmation classifier to stop", async () => {
+    const filePath = path.join(tempDir, "tasks.md");
+    await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "continuation_confirmation") {
+          return {
+            responseId: "confirm_stop",
+            finalAnswer: JSON.stringify({ decision: "stop", reason: "user cancelled" }),
+            toolCalls: []
+          };
+        }
+
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [{ id: "call_1", name: "local_search", input: { query: "TODO owner Priya" } }]
+          };
+        }
+
+        if (mainCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [{ id: "call_2", name: "local_search", input: { query: "more Priya detail" } }]
+          };
+        }
+
+        expect(input.purpose).toBe("conversation");
+        return {
+          responseId: "resp_after_stop",
+          finalAnswer: "No continuation is pending.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const firstResponse = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+    expect(firstResponse).toContain("Reply `continue`");
+
+    const stopResponse = await runAgentTextCommand({
+      text: "不用了",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+    expect(stopResponse).toContain("stopped");
+
+    const continueResponse = await runAgentTextCommand({
+      text: "continue",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+    expect(continueResponse).toBe("No continuation is pending.");
+  });
+
+  it("asks for clarification when the continuation classifier is unclear", async () => {
+    const filePath = path.join(tempDir, "tasks.md");
+    await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "continuation_confirmation") {
+          return {
+            responseId: "confirm_unclear",
+            finalAnswer: JSON.stringify({ decision: "unclear", reason: "ambiguous" }),
+            toolCalls: []
+          };
+        }
+
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [{ id: "call_1", name: "local_search", input: { query: "TODO owner Priya" } }]
+          };
+        }
+
+        expect(mainCallCount).toBe(2);
+        return {
+          responseId: "resp_2",
+          toolCalls: [{ id: "call_2", name: "local_search", input: { query: "more Priya detail" } }]
+        };
+      }
+    };
+
+    await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    const unclearResponse = await runAgentTextCommand({
+      text: "maybe later",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(unclearResponse).toContain("continue the unfinished tool run");
+    expect(mainCallCount).toBe(2);
+  });
+
+  it("drops a pending continuation after five unrelated classified turns", async () => {
+    const filePath = path.join(tempDir, "tasks.md");
+    await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "continuation_confirmation") {
+          return {
+            responseId: "confirm_unrelated",
+            finalAnswer: JSON.stringify({ decision: "unrelated", reason: "new request" }),
+            toolCalls: []
+          };
+        }
+
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [{ id: "call_1", name: "local_search", input: { query: "TODO owner Priya" } }]
+          };
+        }
+
+        if (mainCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [{ id: "call_2", name: "local_search", input: { query: "more Priya detail" } }]
+          };
+        }
+
+        return {
+          responseId: `resp_${mainCallCount}`,
+          finalAnswer: `Unrelated answer ${mainCallCount}.`,
+          toolCalls: []
+        };
+      }
+    };
+
+    await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    for (let index = 0; index < 5; index += 1) {
+      await runAgentTextCommand({
+        text: `Unrelated question ${index + 1}`,
+        slackUserId: "U123",
+        channelId: "D123",
+        source: "app_home_message",
+        config,
+        modelClient
+      });
+    }
+
+    const continueResponse = await runAgentTextCommand({
+      text: "continue",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(continueResponse).toBe("Unrelated answer 8.");
+  });
+
+  it("clears continuation state when resumed review reaches the context limit", async () => {
+    const filePath = path.join(tempDir, "tasks.md");
+    const detailsPath = path.join(tempDir, "details.md");
+    await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
+    await fs.writeFile(detailsPath, "Runbook detail: publish the rollout checklist after QA.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          return {
+            responseId: `review_${mainCallCount}`,
+            finalAnswer: JSON.stringify({
+              decision: "needs_more_context",
+              message: "Search for one more detail before answering."
+            }),
+            toolCalls: []
+          };
+        }
+
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [{ id: "call_1", name: "local_search", input: { query: "TODO owner Priya" } }]
+          };
+        }
+
+        if (mainCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [{ id: "call_2", name: "local_file_read", input: { path: filePath } }]
+          };
+        }
+
+        if (mainCallCount === 3) {
+          return {
+            responseId: "resp_3",
+            toolCalls: [{ id: "call_3", name: "local_search", input: { query: "Runbook detail" } }]
+          };
+        }
+
+        if (mainCallCount === 4 || mainCallCount === 5) {
+          expect(input.purpose).toBe("question");
+          return {
+            responseId: `resp_${mainCallCount}`,
+            finalAnswer: "Draft answer that reviewer will not accept yet.",
+            toolCalls: []
+          };
+        }
+
+        expect(input.purpose).toBe("conversation");
+        expect(input.toolOutputs).toHaveLength(0);
+        return {
+          responseId: "resp_conversation",
+          finalAnswer: "No saved continuation remains.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const firstResponse = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya, and include rollout details?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(firstResponse).toContain("Reply `continue`");
+
+    const limitedResponse = await runAgentTextCommand({
+      text: "continue",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(limitedResponse).toContain("review step could not validate");
+
+    const secondContinueResponse = await runAgentTextCommand({
+      text: "continue",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(secondContinueResponse).toBe("No saved continuation remains.");
+    expect(mainCallCount).toBe(6);
+  });
+
+  it("reads content task files before README search-hint files in typed workflow", async () => {
+    await fs.writeFile(path.join(tempDir, "README.md"), "Search hint: TODO owner Priya appears in the fixture files.", "utf8");
+    await fs.writeFile(path.join(tempDir, "q3-rollout.md"), "TODO owner Priya: prepare the partner rollout checklist.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "TODO owner Priya" }],
+              reads: [{ tool: "local_file_read", fromSearchIndex: 0 }],
+              readPolicy: { maxReads: 1, reason: "Need exact TODO text." }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          return reviewerAcceptResponse();
+        }
+
+        const readOutput = input.toolOutputs.find((output) => output.name === "local_file_read")?.output ?? "";
+        expect(readOutput).toContain("q3-rollout.md");
+        expect(readOutput).toContain("partner rollout checklist");
+        expect(readOutput).not.toContain("README.md");
+        return {
+          responseId: "draft_1",
+          finalAnswer: "Priya owns preparing the partner rollout checklist. Source: q3-rollout.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("partner rollout checklist");
+  });
+
+  it("prefers quiet passage content over docs memory files in typed workflow", async () => {
+    const memoryDir = path.join(tempDir, "docs", "memory");
+    const literatureDir = path.join(tempDir, "literature", "prose");
+    await fs.mkdir(memoryDir, { recursive: true });
+    await fs.mkdir(literatureDir, { recursive: true });
+    await fs.writeFile(path.join(memoryDir, "quiet-plan.md"), "quiet planning notes for agent behavior", "utf8");
+    await fs.writeFile(path.join(literatureDir, "station-rain.txt"), "A quiet rain held the station in silver patience.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "quiet" }],
+              reads: [{ tool: "local_file_read", fromSearchIndex: 0 }],
+              readPolicy: { maxReads: 1, reason: "Need a quiet passage candidate." }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          return reviewerAcceptResponse();
+        }
+
+        const readOutput = input.toolOutputs.find((output) => output.name === "local_file_read")?.output ?? "";
+        expect(readOutput).toContain("station-rain.txt");
+        expect(readOutput).toContain("silver patience");
+        expect(readOutput).not.toContain("quiet-plan.md");
+        return {
+          responseId: "draft_1",
+          finalAnswer: "A quiet passage is from station-rain.txt: silver patience.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask find a quiet short passage",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("station-rain.txt");
+  });
+
+  it("reads docs runbook files when the typed query explicitly asks for runbook content", async () => {
+    const runbookDir = path.join(tempDir, "docs", "runbooks");
+    await fs.mkdir(runbookDir, { recursive: true });
+    await fs.writeFile(
+      path.join(runbookDir, "rollout.md"),
+      "Runbook instruction: publish the rollout checklist after QA.",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(tempDir, "rollout-notes.md"),
+      "Rollout notes mention a runbook search hint but do not contain the instruction.",
+      "utf8"
+    );
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "runbook" }],
+              reads: [{ tool: "local_file_read", fromSearchIndex: 0 }],
+              readPolicy: { maxReads: 1, reason: "Need the runbook instruction." }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          return reviewerAcceptResponse();
+        }
+
+        const readOutput = input.toolOutputs.find((output) => output.name === "local_file_read")?.output ?? "";
+        expect(readOutput).toContain("docs/runbooks/rollout.md");
+        expect(readOutput).toContain("publish the rollout checklist after QA");
+        expect(readOutput).not.toContain("rollout-notes.md");
+        return {
+          responseId: "draft_1",
+          finalAnswer: "The runbook says to publish the rollout checklist after QA. Source: docs/runbooks/rollout.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask What does the rollout runbook say?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("publish the rollout checklist after QA");
+  });
+
+  it("does not demote ordinary docs content files in typed workflow", async () => {
+    const docsDir = path.join(tempDir, "docs");
+    await fs.mkdir(docsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(docsDir, "endpoint-authentication.md"),
+      "Endpoint authentication detail: rotate client tokens every Friday.",
+      "utf8"
+    );
+    await fs.writeFile(
+      path.join(tempDir, "auth-hint.md"),
+      "Endpoint authentication appears in the docs content.",
+      "utf8"
+    );
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "endpoint authentication" }],
+              reads: [{ tool: "local_file_read", fromSearchIndex: 0 }],
+              readPolicy: { maxReads: 1, reason: "Need endpoint details." }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          return reviewerAcceptResponse();
+        }
+
+        const readOutput = input.toolOutputs.find((output) => output.name === "local_file_read")?.output ?? "";
+        expect(readOutput).toContain("endpoint-authentication.md");
+        expect(readOutput).toContain("rotate client tokens every Friday");
+        expect(readOutput).not.toContain("auth-hint.md");
+        return {
+          responseId: "draft_1",
+          finalAnswer: "The docs say to rotate client tokens every Friday. Source: docs/endpoint-authentication.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask What does the authentication endpoint documentation say?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("rotate client tokens every Friday");
+  });
+
+  it("does not return typed reviewer needs-more-context instructions to Slack", async () => {
+    await fs.writeFile(path.join(tempDir, "q3-rollout.md"), "TODO owner Priya: prepare the partner rollout checklist.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "TODO owner Priya" }],
+              reads: [{ tool: "local_file_read", fromSearchIndex: 0 }],
+              readPolicy: { maxReads: 1, reason: "Need exact TODO text." }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          return {
+            responseId: "review_1",
+            finalAnswer: JSON.stringify({
+              decision: "needs_more_context",
+              message: "Read week-27.json or q3-rollout.md before answering."
+            }),
+            toolCalls: []
+          };
+        }
+
+        return {
+          responseId: "draft_1",
+          finalAnswer: "Draft that should not pass review.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("not enough to produce a grounded answer");
+    expect(response).not.toContain("Read week-27.json");
+    expect(response).not.toContain("Draft that should not pass review");
   });
 
   it("retains eight full turns, summarizes overflow, then sends summary plus recent turns", async () => {
