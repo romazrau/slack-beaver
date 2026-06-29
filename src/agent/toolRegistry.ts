@@ -5,7 +5,7 @@ import {
   type GoogleWorkspaceClient
 } from "../google/googleWorkspace.js";
 import { LocalMemoryStore } from "../memory/localMemory.js";
-import { searchLocalFiles, type SearchResult } from "../search/localSearch.js";
+import { readLocalTextFile, searchLocalFiles, type SearchResult } from "../search/localSearch.js";
 
 export type ToolExecutionContext = {
   source: AgentCommandSource;
@@ -31,6 +31,7 @@ export async function runLocalSearchTool(
 
 export type RegisteredToolName =
   | "local_search"
+  | "local_file_read"
   | "gmail_search"
   | "gmail_read_message"
   | "google_drive_search"
@@ -56,6 +57,13 @@ const REGISTERED_TOOL_METADATA = [
       "Search read-only allowlisted local text files for a query. Does not accept paths or shell commands.",
     catalogLine:
       "local_search({ query: string }): Search read-only allowlisted local text files. Hard limits: no path input, no shell command, no token access, no file mutation, no denied folders, no non-registered fields."
+  },
+  {
+    name: "local_file_read" as const,
+    description:
+      "Read one bounded allowlisted local text file by path returned from local_search.",
+    catalogLine:
+      "local_file_read({ path: string }): Read one bounded allowlisted local text file, usually from a local_search result. Hard limits: allowlisted watched folders only, denied folders rejected, supported text extensions only, bounded output, no shell command, no token access, no file mutation, no non-registered fields."
   },
   {
     name: "gmail_search" as const,
@@ -129,6 +137,29 @@ export async function runAgentToolCall(
     };
   }
 
+  if (request.name === "local_file_read") {
+    const input = parseLocalFileReadInput(request.input);
+    if (!input.ok) {
+      recordRejectedToolCall(request, context, input.reason);
+      throw new Error(`Rejected local_file_read tool input: ${input.reason}`);
+    }
+
+    const file = await readLocalTextFile(input.path, context.config.localFiles);
+    context.memoryStore?.recordToolCall({
+      source: context.source,
+      toolName: "local_file_read",
+      inputSummary: "path provided",
+      outputSummary: `content chars=${file.content.length}, truncated=${file.truncated}`,
+      status: "success"
+    });
+    return {
+      callId: request.id,
+      name: "local_file_read",
+      output: JSON.stringify({ file }),
+      resultCount: 1
+    };
+  }
+
   return runGoogleWorkspaceToolCall(request, context);
 }
 
@@ -176,6 +207,16 @@ function containsPathLikeInput(value: string): boolean {
   );
 }
 
+function parseLocalFileReadInput(
+  input: unknown
+): { ok: true; path: string } | { ok: false; reason: string } {
+  const parsed = parseStringFieldInput(input, "path", 1000);
+  if (!parsed.ok) {
+    return parsed;
+  }
+  return parsed;
+}
+
 function recordRejectedToolCall(
   request: AgentToolCallRequest,
   context: ToolExecutionContext,
@@ -192,7 +233,7 @@ function recordRejectedToolCall(
 
 function getAvailableToolMetadata(context?: Pick<ToolExecutionContext, "config" | "memoryStore">) {
   return REGISTERED_TOOL_METADATA.filter(
-    (tool) => tool.name === "local_search" || isGoogleWorkspaceAvailable(context)
+    (tool) => tool.name === "local_search" || tool.name === "local_file_read" || isGoogleWorkspaceAvailable(context)
   );
 }
 
@@ -213,6 +254,8 @@ function buildToolParameters(name: RegisteredToolName) {
       ? "messageId"
       : name === "google_doc_read"
         ? "documentId"
+        : name === "local_file_read"
+          ? "path"
         : "query";
   return {
     type: "object",

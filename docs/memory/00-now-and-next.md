@@ -26,18 +26,23 @@
 - `docs/repo-goal/07-openai-model-selection.md` defines local CLI OpenAI model discovery and switching acceptance criteria.
 - `docs/repo-goal/08-google-workspace-oauth.md` defines and records local Google OAuth onboarding plus read-only Gmail, Drive, and Docs agent tools.
 - `docs/repo-goal/09-central-server-todo.md` defines and records the implemented hybrid architecture slice: Local Server, Center Server, Center Server DB, and central TODO management.
+- `docs/repo-goal/10-search-read-summarize.md` now defines and records the implemented workflow for local and Google search, bounded read, summarization, citation, and required token access.
+- `docs/repo-goal/11-remote-task-dispatch.md` now defines the next hybrid POC plan for Center Server-owned agent tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
 - `docs/memory/agent-conversation-context-and-tools.md` records the defaults, scope, implementation result, and validation for the conversation context and tool catalog phase.
 - `docs/memory/future-hybrid-routing.md` records the future boundary: Central Server owns Slack ingress and Local Agents become user-owned workers when multi-user routing is introduced.
 - `docs/memory/central-server-todo-planning.md` records the decision and implementation result for introducing Central Server through a TODO-only HTTP API first, while keeping Slack ingress in the Local Agent.
+- `docs/memory/search-read-summarize-planning.md` records the search/read/summarize implementation result and minimum OpenAI, Google, and Slack token access.
+- `docs/memory/remote-task-dispatch-planning.md` records the planned next step for durable remote task dispatch without moving local files or credentials into Center Server.
 - `projects/local-server`, `projects/center-server`, and `projects/center-server-db` document the project boundaries.
 - Source code now includes `src/center-db`, `src/center-server`, and `src/cli/centerCli.ts` for central TODO persistence, HTTP API, and local smoke commands.
 - Source code now includes SQLite local memory, folder setup CLI, local memory reset with double confirmation, OpenAI token local setup, App Home setup guidance, Slack token-like refusal, and a local search Tool Registry path.
-- Source code now includes a guarded OpenAI-backed `ask <question>` runner that can only use validated Tool Registry `local_search` calls.
+- Source code now includes a guarded OpenAI-backed `ask <question>` runner that can only use validated Tool Registry search and read calls.
 - Source code now includes App DM natural conversation, persisted conversation turns, overflow summarization, summary-plus-recent context retention, and a Tool Registry-backed agent-readable tool catalog.
 - Source code now includes local CLI OpenAI model discovery and switching, with `gpt-5.5` as the default model and selected model state stored in SQLite settings.
 - Source code now includes local CLI Google OAuth login/status/logout, owner-only Google token file handling, and read-only Gmail, Drive, and Docs Tool Registry tools.
+- Source code now includes `local_file_read`, a bounded read-only local file content tool for follow-up reads after `local_search`.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
 - Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
@@ -70,6 +75,7 @@
 - Live Slack/OpenAI UAT found that selected `ask` prompts could repeat equivalent `local_search` calls and fail with `Agent exceeded the maximum tool-call turns`; automated regression coverage now protects the deterministic repeated-tool-call fallback.
 - Fixture-scope UAT found that `.env` `WATCHED_FOLDERS` and SQLite local-memory allowed folders are merged, so pure fixture UAT requires clearing or aligning `.env` watched folders.
 - Center Server TODO validation passed with focused repository/API handler tests, full `npm run verify` with 18 test files and 90 tests, and local running-server HTTP UAT for health/create/update/list.
+- Search/read/summarize validation passed with focused `localSearch` and `agentCommands` tests, plus full `npm run verify` under Node.js `v22.23.1` with 19 test files and 99 tests.
 - Chrome/Computer Use UAT reached Chrome, but this Chrome profile blocked direct `localhost` and `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; the server was verified independently through local HTTP requests.
 - Quick UAT startup scripts and guide were added; `tests/uatStartScript.test.ts` covers invalid mode and dry-run resume behavior.
 
@@ -81,4 +87,4 @@
 - Expand prompt-injection fixtures beyond the current unknown-tool and malformed-input tests.
 - Replace ad hoc `launchctl submit` with either foreground-only docs or a real LaunchAgent plist template.
 - Keep Phase 5 local index cache deferred until v0 Slack-visible UAT and daemon/runbook gaps are closed.
-- Keep Central Server, multi-agent routing, and task dispatch deferred until the current single-active-agent POC is validated.
+- Plan Remote Task Dispatch as the next hybrid POC once the current single-active-agent search/read/summarize path is validated: Center Server task queue, Local Agent registration, heartbeat, claim leases, and a worker loop.

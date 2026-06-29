@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { isPathAllowed, searchLocalFiles } from "../src/search/localSearch.js";
+import { isPathAllowed, readLocalTextFile, searchLocalFiles } from "../src/search/localSearch.js";
 
 let tempDir: string;
 
@@ -102,6 +102,83 @@ describe("searchLocalFiles", () => {
   it("rejects empty queries", async () => {
     await expect(
       searchLocalFiles(" ", {
+        watchedFolders: [tempDir],
+        denylistFolders: [],
+        maxFileBytes: 1024,
+        maxResults: 10
+      })
+    ).rejects.toThrow(/empty/);
+  });
+});
+
+describe("readLocalTextFile", () => {
+  it("reads bounded content from an allowlisted supported text file", async () => {
+    const filePath = path.join(tempDir, "plan.md");
+    await fs.writeFile(filePath, "A".repeat(20), "utf8");
+
+    const result = await readLocalTextFile(
+      filePath,
+      {
+        watchedFolders: [tempDir],
+        denylistFolders: [],
+        maxFileBytes: 1024,
+        maxResults: 10
+      },
+      5
+    );
+
+    expect(result).toEqual({
+      path: filePath,
+      filename: "plan.md",
+      content: "AAAAA",
+      truncated: true
+    });
+  });
+
+  it("rejects paths outside watched folders", async () => {
+    const outsideDir = await fs.mkdtemp(path.join(os.tmpdir(), "slack-beaver-outside-"));
+    const outsidePath = path.join(outsideDir, "secret.md");
+    await fs.writeFile(outsidePath, "secret", "utf8");
+
+    try {
+      await expect(
+        readLocalTextFile(outsidePath, {
+          watchedFolders: [tempDir],
+          denylistFolders: [],
+          maxFileBytes: 1024,
+          maxResults: 10
+        })
+      ).rejects.toThrow(/allowlisted/);
+    } finally {
+      await fs.rm(outsideDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects denied, unsupported, and oversized files", async () => {
+    const denied = path.join(tempDir, "private");
+    await fs.mkdir(denied);
+    const deniedPath = path.join(denied, "secret.md");
+    const unsupportedPath = path.join(tempDir, "image.png");
+    const oversizedPath = path.join(tempDir, "large.md");
+    await fs.writeFile(deniedPath, "secret", "utf8");
+    await fs.writeFile(unsupportedPath, "not really an image", "utf8");
+    await fs.writeFile(oversizedPath, "0123456789", "utf8");
+
+    const options = {
+      watchedFolders: [tempDir],
+      denylistFolders: [denied],
+      maxFileBytes: 5,
+      maxResults: 10
+    };
+
+    await expect(readLocalTextFile(deniedPath, options)).rejects.toThrow(/denied/);
+    await expect(readLocalTextFile(unsupportedPath, options)).rejects.toThrow(/extension/);
+    await expect(readLocalTextFile(oversizedPath, options)).rejects.toThrow(/larger/);
+  });
+
+  it("rejects empty paths", async () => {
+    await expect(
+      readLocalTextFile(" ", {
         watchedFolders: [tempDir],
         denylistFolders: [],
         maxFileBytes: 1024,

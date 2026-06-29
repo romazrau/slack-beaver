@@ -138,6 +138,7 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - Local-only OpenAI model discovery and switching through CLI.
 - Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.
 - Guarded OpenAI-backed `ask <question>` flow that can only call registered Tool Registry tools.
+- Read-only local file content tool for bounded follow-up reads after local search.
 - Repeated model-requested tool calls are stopped and answered from the last bounded tool output when possible.
 - Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
 - Center Server TODO API for creating, listing, fetching, and updating centrally stored TODOs.
@@ -159,5 +160,7 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - [OpenAI Model Selection](docs/repo-goal/07-openai-model-selection.md): local CLI model discovery, selected model storage, and validation criteria.
 - [Google Workspace OAuth And Read-only Tools](docs/repo-goal/08-google-workspace-oauth.md): local Google OAuth, read-only agent tools, token storage, and validation criteria.
 - [Central Server TODO Management](docs/repo-goal/09-central-server-todo.md): planned Local Server, Center Server, and Center Server DB split with TODO management as the first central capability.
+- [Search, Read, And Summarize Workflow](docs/repo-goal/10-search-read-summarize.md): implemented local and Google search/read/summarize workflow plus required token access.
+- [Remote Task Dispatch And Agent Optimization](docs/repo-goal/11-remote-task-dispatch.md): planned next hybrid POC for Center Server-owned tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.

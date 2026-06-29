@@ -454,6 +454,7 @@ function buildAgentInstructions(): string {
     "Do not execute shell commands.",
     "Do not modify files.",
     "Answer from retrieved tool context when local files or Google Workspace content is needed.",
+    "Use search tools first to find candidate sources. If snippets are insufficient, read only the top one to three relevant sources with the matching read tool.",
     "When a tool result contains enough context to answer, stop calling tools and produce the final answer.",
     "Do not repeat the same tool call with the same input.",
     "If retrieved context is insufficient, say that the configured context is insufficient.",
@@ -470,7 +471,7 @@ function buildConversationInstructions(context: Pick<ToolExecutionContext, "conf
     "An agent-readable tool catalog is provided below and must match registered runtime tools.",
     buildAgentReadableToolCatalog(context),
     context.config.localFiles.watchedFolders.length > 0
-      ? "Allowlisted local folders are configured; use local_search when local documents are needed."
+      ? "Allowlisted local folders are configured; use local_search when local documents are needed, then local_file_read when the search snippet is not enough."
       : "No allowlisted local folders are configured. General conversation can continue, but local document answers require folder setup before local_search can return useful context."
   ].join("\n");
 }

@@ -178,7 +178,7 @@ describe("runAgentTextCommand", () => {
     const modelClient: AgentModelClient = {
       async createResponse(input) {
         expect(input.purpose).toBe("conversation");
-        expect(input.tools.map((tool) => tool.name)).toEqual(["local_search"]);
+        expect(input.tools.map((tool) => tool.name)).toEqual(["local_search", "local_file_read"]);
         expect(input.instructions).toContain("No allowlisted local folders are configured");
         return {
           responseId: "resp_1",
@@ -223,6 +223,7 @@ describe("runAgentTextCommand", () => {
       async createResponse(input) {
         expect(input.tools.map((tool) => tool.name)).toEqual([
           "local_search",
+          "local_file_read",
           "gmail_search",
           "gmail_read_message",
           "google_drive_search",
@@ -319,6 +320,268 @@ describe("runAgentTextCommand", () => {
     const auditLine = await fs.readFile(config.auditLogPath, "utf8");
     expect(auditLine).not.toContain("secret migration detail");
     expect(auditLine).not.toContain("lead@example.com");
+  });
+
+  it("runs local search then local file read before answering", async () => {
+    const filePath = path.join(tempDir, "rollout.md");
+    await fs.writeFile(
+      filePath,
+      "Rollout plan details: verify Slack UAT, confirm Google OAuth, then publish the runbook.",
+      "utf8"
+    );
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let modelCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        modelCallCount += 1;
+        if (modelCallCount === 1) {
+          expect(input.instructions).toContain("read only the top one to three relevant sources");
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "local_search",
+                input: { query: "Rollout plan details" }
+              }
+            ]
+          };
+        }
+
+        if (modelCallCount === 2) {
+          expect(input.toolOutputs[0]?.name).toBe("local_search");
+          expect(input.toolOutputs[0]?.output).toContain("rollout.md");
+          return {
+            responseId: "resp_2",
+            toolCalls: [
+              {
+                id: "call_2",
+                name: "local_file_read",
+                input: { path: filePath }
+              }
+            ]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.name).toBe("local_file_read");
+        expect(input.toolOutputs[0]?.output).toContain("confirm Google OAuth");
+        return {
+          responseId: "resp_3",
+          finalAnswer: "The rollout plan says to verify Slack UAT, confirm Google OAuth, then publish the runbook. Source: rollout.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask What are the rollout plan details?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(modelCallCount).toBe(3);
+    expect(response).toContain("confirm Google OAuth");
+    const auditLine = await fs.readFile(config.auditLogPath, "utf8");
+    const parsed = JSON.parse(auditLine.trim());
+    expect(parsed).toMatchObject({
+      query: "What are the rollout plan details?",
+      resultCount: 2,
+      status: "success",
+      source: "app_home_message"
+    });
+    expect(auditLine).not.toContain("confirm Google OAuth");
+  });
+
+  it("runs Gmail search then Gmail read before answering without auditing the body", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+    let modelCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        modelCallCount += 1;
+        if (modelCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "gmail_search",
+                input: { query: "launch readiness" }
+              }
+            ]
+          };
+        }
+
+        if (modelCallCount === 2) {
+          expect(input.toolOutputs[0]?.output).toContain("msg-1");
+          return {
+            responseId: "resp_2",
+            toolCalls: [
+              {
+                id: "call_2",
+                name: "gmail_read_message",
+                input: { messageId: "msg-1" }
+              }
+            ]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.output).toContain("private launch body detail");
+        return {
+          responseId: "resp_3",
+          finalAnswer: "The launch email asks the team to finish readiness review. Source: Launch readiness.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "Summarize the launch readiness email",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient,
+      googleWorkspaceClient: {
+        async gmailSearch() {
+          return [
+            {
+              messageId: "msg-1",
+              subject: "Launch readiness",
+              from: "lead@example.com",
+              date: "2026-06-29",
+              snippet: "readiness review"
+            }
+          ];
+        },
+        async gmailReadMessage() {
+          return {
+            messageId: "msg-1",
+            subject: "Launch readiness",
+            from: "lead@example.com",
+            date: "2026-06-29",
+            snippet: "readiness review",
+            body: "private launch body detail: finish readiness review"
+          };
+        },
+        async googleDriveSearch() {
+          throw new Error("not used");
+        },
+        async googleDocRead() {
+          throw new Error("not used");
+        }
+      }
+    });
+
+    expect(modelCallCount).toBe(3);
+    expect(response).toContain("readiness review");
+    const auditLine = await fs.readFile(config.auditLogPath, "utf8");
+    expect(auditLine).not.toContain("private launch body detail");
+    expect(auditLine).not.toContain("lead@example.com");
+  });
+
+  it("runs Google Drive search then Google Docs read before answering", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+    let modelCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        modelCallCount += 1;
+        if (modelCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "google_drive_search",
+                input: { query: "Q3 planning" }
+              }
+            ]
+          };
+        }
+
+        if (modelCallCount === 2) {
+          expect(input.toolOutputs[0]?.output).toContain("doc_123");
+          return {
+            responseId: "resp_2",
+            toolCalls: [
+              {
+                id: "call_2",
+                name: "google_doc_read",
+                input: { documentId: "doc_123" }
+              }
+            ]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.output).toContain("private doc detail");
+        return {
+          responseId: "resp_3",
+          finalAnswer: "Q3 planning says onboarding is the priority. Source: Q3 Planning.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "What does the Q3 planning doc say?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient,
+      googleWorkspaceClient: {
+        async gmailSearch() {
+          throw new Error("not used");
+        },
+        async gmailReadMessage() {
+          throw new Error("not used");
+        },
+        async googleDriveSearch() {
+          return [
+            {
+              documentId: "doc_123",
+              name: "Q3 Planning",
+              mimeType: "application/vnd.google-apps.document"
+            }
+          ];
+        },
+        async googleDocRead() {
+          return {
+            documentId: "doc_123",
+            title: "Q3 Planning",
+            content: "private doc detail: onboarding is the priority"
+          };
+        }
+      }
+    });
+
+    expect(modelCallCount).toBe(3);
+    expect(response).toContain("onboarding is the priority");
+    const auditLine = await fs.readFile(config.auditLogPath, "utf8");
+    expect(auditLine).not.toContain("private doc detail");
   });
 
   it("runs ask with a fake model client and audited local_search tool call", async () => {

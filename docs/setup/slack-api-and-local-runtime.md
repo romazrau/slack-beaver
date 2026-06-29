@@ -28,6 +28,7 @@ Create or use an internal Slack app with these settings:
 - Event Subscriptions: enabled
 - Bot events: `app_home_opened`, `message.im`
 - Bot scopes: `commands`, `chat:write`, `im:history`
+- App-level Socket Mode token scope: `connections:write`
 
 Reinstall the Slack app after changing scopes, events, App Home, or slash command settings.
 
@@ -47,6 +48,7 @@ Current internal/test app reference:
 - Regenerate tokens from Slack app settings if token exposure is suspected.
 - OpenAI API tokens must be configured through the local CLI, not through Slack.
 - OpenAI API keys need `List models: Read` for local model discovery and switching, plus `Responses: Write` for the selected model.
+- Google OAuth should stay read-only: `openid`, `email`, `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/drive.readonly`, and `https://www.googleapis.com/auth/documents.readonly`.
 
 Secret-safe `.env` presence check:
 
@@ -186,7 +188,17 @@ npm run agent:google:logout
 
 Set `GOOGLE_WORKSPACE_ENABLED=true` and `GOOGLE_OAUTH_CLIENT_ID` before running login. The login command opens the local system browser, uses a localhost OAuth callback with PKCE and state validation, asks Google for account email plus offline read-only Gmail, Drive, and Docs scopes, and saves the token to `GOOGLE_TOKEN_PATH` with `0600` file permissions. SQLite stores only provider setup metadata, granted scopes, and account email.
 
-The first read-only Google tools exposed to the agent are `gmail_search`, `gmail_read_message`, `google_drive_search`, and `google_doc_read`. They stay behind the Tool Registry and return bounded summaries. Gmail and document bodies are treated as untrusted context and are not written to the JSONL audit log.
+Current Google OAuth scopes are:
+
+- `openid`
+- `email`
+- `https://www.googleapis.com/auth/gmail.readonly`
+- `https://www.googleapis.com/auth/drive.readonly`
+- `https://www.googleapis.com/auth/documents.readonly`
+
+Do not request Gmail send/modify/delete, Drive write/share/delete, Docs write/comment, Calendar, Contacts, Admin SDK, or broad Workspace management scopes for the current read-only agent.
+
+The read-only tools exposed to the agent are `local_search`, `local_file_read`, `gmail_search`, `gmail_read_message`, `google_drive_search`, and `google_doc_read` when their providers are configured. They stay behind the Tool Registry and return bounded content. Local file, Gmail, and document bodies are treated as untrusted context and are not written to the JSONL audit log.
 
 Reset local memory with double confirmation:
 

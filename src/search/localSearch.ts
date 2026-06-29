@@ -12,6 +12,13 @@ export type SearchResult = {
   snippet: string;
 };
 
+export type LocalFileReadResult = {
+  path: string;
+  filename: string;
+  content: string;
+  truncated: boolean;
+};
+
 export type LocalSearchOptions = {
   watchedFolders: string[];
   denylistFolders: string[];
@@ -26,6 +33,7 @@ type CandidateFile = {
 };
 
 const DEFAULT_SNIPPET_LENGTH = 160;
+const DEFAULT_READ_MAX_CHARS = 4000;
 
 export function isPathAllowed(
   targetPath: string,
@@ -94,6 +102,58 @@ export async function searchLocalFiles(
   }
 
   return results;
+}
+
+export async function readLocalTextFile(
+  targetPath: string,
+  options: LocalSearchOptions,
+  maxChars = DEFAULT_READ_MAX_CHARS
+): Promise<LocalFileReadResult> {
+  const resolvedPath = path.resolve(targetPath.trim());
+  if (!targetPath.trim()) {
+    throw new Error("Local file path cannot be empty.");
+  }
+
+  const insideWatched = options.watchedFolders
+    .map((folder) => path.resolve(folder))
+    .some((folder) => isSameOrChildPath(resolvedPath, folder));
+  if (!insideWatched) {
+    throw new Error("Local file path is not inside an allowlisted folder.");
+  }
+
+  const insideDenied = options.denylistFolders
+    .map((folder) => path.resolve(folder))
+    .some((folder) => isSameOrChildPath(resolvedPath, folder));
+  if (insideDenied) {
+    throw new Error("Local file path is inside a denied folder.");
+  }
+
+  const extension = path.extname(resolvedPath).toLowerCase();
+  if (!SUPPORTED_EXTENSIONS.has(extension)) {
+    throw new Error("Local file extension is not supported.");
+  }
+
+  const stat = await statFile(resolvedPath);
+  if (stat === undefined || !stat.isFile()) {
+    throw new Error("Local file does not exist or is not a file.");
+  }
+
+  if (stat.size > options.maxFileBytes) {
+    throw new Error("Local file is larger than the configured maximum.");
+  }
+
+  const content = await readTextFile(resolvedPath);
+  if (content === undefined) {
+    throw new Error("Local file could not be read as text.");
+  }
+
+  const bounded = content.length > maxChars ? content.slice(0, maxChars) : content;
+  return {
+    path: resolvedPath,
+    filename: path.basename(resolvedPath),
+    content: bounded,
+    truncated: bounded.length < content.length
+  };
 }
 
 async function collectCandidateFiles(options: LocalSearchOptions): Promise<CandidateFile[]> {
