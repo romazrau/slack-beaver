@@ -116,6 +116,11 @@ npm run agent:google:logout
 npm run center:tasks:list
 npm run center:tasks:create -- --title "Follow up" --created-by U123 --owner U456
 npm run center:tasks:update -- --id 1 --status done
+npm run center:agents:register -- --agent-id local-1 --owner U123
+npm run center:agent-tasks:create -- --question "What changed?" --created-by U123 --owner U123
+npm run center:agent-tasks:list
+npm run center:agent-tasks:claim -- --agent-id local-1
+npm run agent:worker -- once
 ```
 
 ## Project Areas
@@ -123,8 +128,8 @@ npm run center:tasks:update -- --id 1 --status done
 The repository now has a hybrid Local Server plus Center Server foundation:
 
 - [Local Server](projects/local-server/README.md): current Slack Socket Mode Local Agent for local files, local credentials, guarded AI tools, and Slack replies.
-- [Center Server](projects/center-server/README.md): central HTTP runtime. The first slice is TODO management.
-- [Center Server DB](projects/center-server-db/README.md): central TODO persistence module, starting with SQLite.
+- [Center Server](projects/center-server/README.md): central HTTP runtime for TODO management and the first remote agent task dispatch slice.
+- [Center Server DB](projects/center-server-db/README.md): central TODO and agent task persistence module, starting with SQLite.
 
 ## Current Features
 
@@ -142,6 +147,7 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - Repeated model-requested tool calls are stopped and answered from the last bounded tool output when possible.
 - Bounded App DM conversation context with 8 full turns before summarization, then one summary plus the latest 4 full turns.
 - Center Server TODO API for creating, listing, fetching, and updating centrally stored TODOs.
+- Center Server remote agent task queue with Local Agent registration, heartbeat, claim leases, and a one-shot worker mode for `answer_question` tasks.
 - JSONL audit log for successful and failed searchable tool activity.
 - Synthetic local-search fixtures under `doc-test/` for manual validation.
 
@@ -161,6 +167,6 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - [Google Workspace OAuth And Read-only Tools](docs/repo-goal/08-google-workspace-oauth.md): local Google OAuth, read-only agent tools, token storage, and validation criteria.
 - [Central Server TODO Management](docs/repo-goal/09-central-server-todo.md): planned Local Server, Center Server, and Center Server DB split with TODO management as the first central capability.
 - [Search, Read, And Summarize Workflow](docs/repo-goal/10-search-read-summarize.md): implemented local and Google search/read/summarize workflow plus required token access.
-- [Remote Task Dispatch And Agent Optimization](docs/repo-goal/11-remote-task-dispatch.md): planned next hybrid POC for Center Server-owned tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
+- [Remote Task Dispatch And Agent Optimization](docs/repo-goal/11-remote-task-dispatch.md): implemented first hybrid dispatch slice for Center Server-owned tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.

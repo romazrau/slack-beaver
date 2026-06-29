@@ -21,9 +21,27 @@ This phase should answer two product questions:
   messages by calling registered tools.
 - Tool Registry already enforces a small read-only tool surface for local files,
   Gmail, Google Drive, and Google Docs.
-- Center Server currently exposes a TODO-only HTTP API.
-- Center Server does not yet authenticate Local Agents, register agent
-  capability, lease tasks, dispatch work, or receive execution results.
+- Center Server exposes TODO management plus the first remote agent task
+  dispatch slice.
+- Center Server now supports Local Agent registration, heartbeat, task creation,
+  claim leases, and completion/failure reporting for `answer_question` tasks.
+
+## Implemented Scope
+
+Implemented on 2026-06-29.
+
+- Added `AgentTaskRepository` with SQLite migrations for `registered_agents`
+  and `agent_tasks`.
+- Added Local Agent registration and heartbeat.
+- Added durable `answer_question` task creation.
+- Added task claiming with claim leases and attempt counts.
+- Added terminal task updates for `completed`, `failed`, and `canceled`.
+- Added Center HTTP endpoints for agent registration, heartbeat, task create,
+  task list, task get, task claim, and task update.
+- Added Center CLI smoke commands for agent registration and agent task create,
+  list, and claim.
+- Added one-shot Local Agent worker mode through `npm run agent:worker -- once`.
+- Added worker tests with fake Center Server clients and fake executors.
 
 ## POC Boundary
 
@@ -166,13 +184,13 @@ Validation rules:
 
 ## Local Agent Worker
 
-Add a worker loop that can run separately from Slack Socket Mode:
+Added a one-shot worker mode that can run separately from Slack Socket Mode:
 
 ```sh
-npm run agent:worker
+npm run agent:worker -- once
 ```
 
-The worker should:
+The worker:
 
 1. Register itself with Center Server.
 2. Send periodic heartbeat.
@@ -208,21 +226,22 @@ decomposition until durable dispatch is validated.
 
 ## Acceptance Criteria
 
-- Center Server can register a Local Agent and record heartbeat state.
-- A queued `answer_question` task can be created through HTTP or CLI.
-- A Local Agent worker can claim one eligible task and move it to `running`.
-- Two workers polling at the same time cannot claim the same task.
-- A worker can complete a task and report a bounded result summary.
-- A worker can fail a task and report a bounded error summary.
-- A running task with an expired claim lease can be reclaimed.
-- Completed, failed, and canceled tasks cannot be reclaimed.
+- Center Server can register a Local Agent and record heartbeat state. Implemented.
+- A queued `answer_question` task can be created through HTTP or CLI. Implemented.
+- A Local Agent worker can claim one eligible task and move it to `running`. Implemented.
+- Two workers polling at the same time cannot claim the same task. Implemented through claim lease tests.
+- A worker can complete a task and report a bounded result summary. Implemented.
+- A worker can fail a task and report a bounded error summary. Implemented.
+- A running task with an expired claim lease can be reclaimed. Implemented.
+- Completed, failed, and canceled tasks cannot be reclaimed. Implemented.
 - Center Server never stores local file bodies, email bodies, Google Docs
-  bodies, OpenAI tokens, Google tokens, or Slack tokens.
+  bodies, OpenAI tokens, Google tokens, or Slack tokens. Implemented by storing
+  only task input plus bounded result/error summaries.
 - Existing Slack `find`, `ask`, and App DM conversation behavior remains
-  unchanged.
+  unchanged. Protected by existing regression tests and unchanged Slack ingress.
 - Tests cover repository lifecycle behavior, HTTP validation, claim lease
   behavior, worker happy path, worker failure path, and existing command
-  regressions.
+  regressions. Implemented for the new repository, API handler, and worker.
 
 ## Verification Plan
 
@@ -247,27 +266,54 @@ Manual UAT:
 - Stop a worker during `running`, wait for lease expiry, and verify another
   worker can reclaim.
 
+## Validation
+
+- `npm test -- tests/agentTaskRepository.test.ts tests/centerServer.test.ts tests/agentWorker.test.ts`
+  passed under Node.js 22.23.1 with 14 tests.
+- `npm run typecheck` passed under Node.js 22.23.1.
+- `npm run verify` passed under Node.js 22.23.1 with 21 test files and 109
+  tests, plus typecheck and build.
+- CLI smoke passed against `/tmp/slack-beaver-dispatch-smoke.sqlite` for
+  `center:agents:register`, `center:agent-tasks:create`,
+  `center:agent-tasks:claim`, and `center:agent-tasks:list`.
+- Chrome UAT on 2026-06-29 confirmed that this Chrome profile still blocks
+  direct `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`; the Chrome tab
+  screenshot showed `127.0.0.1` blocked before API JSON could render.
+- Computer Use UAT on 2026-06-29 confirmed Computer Use itself can inspect the
+  desktop through Finder, but it could not access Chrome's key window and
+  returned `cgWindowNotFound` for Google Chrome.
+- Local running-server UAT passed on 2026-06-29 against
+  `http://127.0.0.1:4319`: registered `chrome-uat-agent`, created an
+  `answer_question` task, ran `npm run agent:worker -- once`, and verified the
+  task reached `completed` with a bounded setup-guidance result summary.
+- First validation attempt under Node.js 24.18.0 was blocked by the project
+  Node.js 22 preflight check before tests ran.
+- The first sandboxed CLI smoke attempt hit a `tsx` IPC pipe `EPERM`; rerunning
+  the same command with approval passed.
+
 ## Implementation Slices
 
 ### Slice 1: Center Task Queue
 
 Add `agent_tasks` repository, schema, validation, and HTTP endpoints. No worker
-yet. Prove lifecycle state and lease rules with tests.
+yet. Prove lifecycle state and lease rules with tests. Implemented.
 
 ### Slice 2: Agent Registry
 
 Add agent registration and heartbeat. Keep auth minimal for POC, such as a local
-development shared secret, but make the boundary explicit.
+development shared secret, but make the boundary explicit. Implemented without
+production auth; auth remains deferred.
 
 ### Slice 3: Local Worker
 
 Add worker config, polling, claim, execution, result reporting, and focused
-tests with fake clients.
+tests with fake clients. Implemented as one-shot worker mode.
 
 ### Slice 4: Slack Or CLI Entry
 
 Expose task creation through a CLI first. Add Slack command integration only
-after HTTP and worker behavior are stable.
+after HTTP and worker behavior are stable. CLI implemented; Slack integration
+remains deferred.
 
 ## Deferred
 

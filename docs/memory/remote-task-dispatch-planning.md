@@ -32,14 +32,18 @@ A small dispatch POC validates the important hybrid boundary without requiring
 Central Slack ingress, full RBAC, browser automation, or a distributed search
 index.
 
-## Planned Scope
+## Implementation
 
-- Add Center Server agent registry and heartbeat.
-- Add durable `agent_tasks` queue with explicit lifecycle state.
-- Add claim leases so only one Local Agent executes a task.
-- Add a Local Agent worker loop that polls, claims, executes, and reports.
-- Start with one narrow task type: `answer_question({ question: string })`.
-- Reuse existing guarded agent runner and Tool Registry.
+Implemented the first Remote Task Dispatch vertical slice:
+
+- Added Center Server agent registry and heartbeat.
+- Added durable `agent_tasks` queue with explicit lifecycle state.
+- Added claim leases so only one Local Agent executes a task before lease expiry.
+- Added a one-shot Local Agent worker that registers, heartbeats, claims,
+  executes, and reports.
+- Started with one narrow task type: `answer_question({ question: string })`.
+- Reused existing guarded agent runner and Tool Registry for local execution.
+- Added CLI smoke commands for registration, task creation, listing, and claim.
 
 ## Safety Boundaries
 
@@ -49,13 +53,25 @@ index.
   denylist, size, extension, and bounded-output checks.
 - Arbitrary shell commands and write/edit tools remain out of scope.
 
-## Validation Plan
+## Validation
 
 - Repository and HTTP tests for lifecycle transitions, claim lease behavior,
-  malformed input, terminal statuses, and missing ids.
-- Worker tests with fake Center Server client and fake agent executor.
-- Regression tests for existing Slack `find`, `ask`, and App DM behavior.
-- Manual UAT with one worker, two workers, and lease-expiry reclaim.
+  malformed input, terminal statuses, and missing ids passed.
+- Worker tests with fake Center Server client and fake agent executor passed.
+- `npm test -- tests/agentTaskRepository.test.ts tests/centerServer.test.ts tests/agentWorker.test.ts`
+  passed under Node.js 22.23.1 with 14 tests.
+- `npm run typecheck` passed under Node.js 22.23.1.
+- `npm run verify` passed under Node.js 22.23.1 with 21 test files and 109
+  tests, plus typecheck and build.
+- CLI smoke passed against a temporary SQLite DB in `/tmp` for agent register,
+  task create, task claim, and task list.
+- Chrome UAT on 2026-06-29 confirmed this Chrome profile still blocks direct
+  `127.0.0.1` navigation with `ERR_BLOCKED_BY_CLIENT`.
+- Computer Use UAT on 2026-06-29 confirmed Computer Use can inspect Finder, but
+  could not access Chrome's key window and returned `cgWindowNotFound`.
+- Manual running-server UAT passed on 2026-06-29 against
+  `http://127.0.0.1:4319`: the Local Agent one-shot worker claimed task `1` and
+  completed it with bounded local AI token setup guidance.
 
 ## Deferred
 

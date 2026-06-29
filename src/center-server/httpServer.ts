@@ -1,6 +1,12 @@
 import http, { type IncomingMessage, type ServerResponse } from "node:http";
 import { URL } from "node:url";
 import {
+  AgentTaskRepository,
+  AgentTaskValidationError,
+  type CreateAgentTaskInput,
+  type UpdateAgentTaskInput
+} from "../center-db/agentTasks.js";
+import {
   CenterTaskRepository,
   type CreateTaskInput,
   TaskValidationError,
@@ -9,6 +15,7 @@ import {
 
 export type CenterHttpServerOptions = {
   repository: CenterTaskRepository;
+  agentTaskRepository?: AgentTaskRepository;
 };
 
 export type CenterRequestInput = {
@@ -38,11 +45,16 @@ export function createCenterHttpServer(options: CenterHttpServerOptions): http.S
           path: url.pathname,
           body
         },
-        options.repository
+        options.repository,
+        options.agentTaskRepository
       );
       sendJson(response, result.statusCode, result.body);
     } catch (error) {
-      if (error instanceof TaskValidationError || error instanceof RequestValidationError) {
+      if (
+        error instanceof TaskValidationError ||
+        error instanceof AgentTaskValidationError ||
+        error instanceof RequestValidationError
+      ) {
         sendJson(response, 400, { error: error.message });
         return;
       }
@@ -55,12 +67,17 @@ export function createCenterHttpServer(options: CenterHttpServerOptions): http.S
 
 export function handleCenterRequest(
   input: CenterRequestInput,
-  repository: CenterTaskRepository
+  repository: CenterTaskRepository,
+  agentTaskRepository?: AgentTaskRepository
 ): CenterResponseOutput {
   try {
-    return handleValidatedCenterRequest(input, repository);
+    return handleValidatedCenterRequest(input, repository, agentTaskRepository);
   } catch (error) {
-    if (error instanceof TaskValidationError || error instanceof RequestValidationError) {
+    if (
+      error instanceof TaskValidationError ||
+      error instanceof AgentTaskValidationError ||
+      error instanceof RequestValidationError
+    ) {
       return { statusCode: 400, body: { error: error.message } };
     }
     throw error;
@@ -69,7 +86,8 @@ export function handleCenterRequest(
 
 function handleValidatedCenterRequest(
   input: CenterRequestInput,
-  repository: CenterTaskRepository
+  repository: CenterTaskRepository,
+  agentTaskRepository?: AgentTaskRepository
 ): CenterResponseOutput {
   const method = input.method;
   const pathname = input.path;
@@ -84,6 +102,69 @@ function handleValidatedCenterRequest(
 
   if (method === "GET" && pathname === "/tasks") {
     return { statusCode: 200, body: { tasks: repository.listTasks() } };
+  }
+
+  if (method === "POST" && pathname === "/agents/register") {
+    const body = requireJsonObject(input.body);
+    const agent = requireAgentTaskRepository(agentTaskRepository).registerAgent({
+      agentId: body.agentId as string,
+      ownerSlackUserId: body.ownerSlackUserId as string,
+      displayName: body.displayName as string | null | undefined,
+      capabilities: body.capabilities as string[]
+    });
+    return { statusCode: 200, body: { agent } };
+  }
+
+  const heartbeatMatch = pathname.match(/^\/agents\/([^/]+)\/heartbeat$/);
+  if (method === "POST" && heartbeatMatch) {
+    const agent = requireAgentTaskRepository(agentTaskRepository).recordHeartbeat(
+      decodeURIComponent(heartbeatMatch[1])
+    );
+    if (!agent) {
+      return { statusCode: 404, body: { error: "Agent not found." } };
+    }
+    return { statusCode: 200, body: { agent } };
+  }
+
+  if (method === "GET" && pathname === "/agent-tasks") {
+    return { statusCode: 200, body: { tasks: requireAgentTaskRepository(agentTaskRepository).listTasks() } };
+  }
+
+  if (method === "POST" && pathname === "/agent-tasks") {
+    const body = requireJsonObject(input.body);
+    const task = requireAgentTaskRepository(agentTaskRepository).createTask(toCreateAgentTaskInput(body));
+    return { statusCode: 201, body: { task } };
+  }
+
+  if (method === "POST" && pathname === "/agent-tasks/claim") {
+    const body = requireJsonObject(input.body);
+    const task = requireAgentTaskRepository(agentTaskRepository).claimNextTask({
+      agentId: body.agentId as string,
+      leaseSeconds: body.leaseSeconds as number | undefined
+    });
+    return { statusCode: 200, body: { task: task ?? null } };
+  }
+
+  const agentTaskMatch = pathname.match(/^\/agent-tasks\/(\d+)$/);
+  if (agentTaskMatch) {
+    const id = Number(agentTaskMatch[1]);
+
+    if (method === "GET") {
+      const task = requireAgentTaskRepository(agentTaskRepository).getTask(id);
+      if (!task) {
+        return { statusCode: 404, body: { error: "Agent task not found." } };
+      }
+      return { statusCode: 200, body: { task } };
+    }
+
+    if (method === "PATCH") {
+      const body = requireJsonObject(input.body);
+      const task = requireAgentTaskRepository(agentTaskRepository).updateTask(id, toUpdateAgentTaskInput(body));
+      if (!task) {
+        return { statusCode: 404, body: { error: "Agent task not found." } };
+      }
+      return { statusCode: 200, body: { task } };
+    }
   }
 
   if (method === "POST" && pathname === "/tasks") {
@@ -135,6 +216,31 @@ function toUpdateTaskInput(body: JsonRecord): UpdateTaskInput {
     }
   }
   return input;
+}
+
+function toCreateAgentTaskInput(body: JsonRecord): CreateAgentTaskInput {
+  return {
+    type: body.type as CreateAgentTaskInput["type"],
+    createdBy: body.createdBy as string,
+    targetOwner: body.targetOwner as string | null | undefined,
+    input: body.input as Record<string, unknown>
+  };
+}
+
+function toUpdateAgentTaskInput(body: JsonRecord): UpdateAgentTaskInput {
+  return {
+    status: body.status as UpdateAgentTaskInput["status"],
+    resultSummary: body.resultSummary as string | null | undefined,
+    errorSummary: body.errorSummary as string | null | undefined,
+    agentId: body.agentId as string | undefined
+  };
+}
+
+function requireAgentTaskRepository(repository: AgentTaskRepository | undefined): AgentTaskRepository {
+  if (!repository) {
+    throw new RequestValidationError("Agent task repository is not configured.");
+  }
+  return repository;
 }
 
 async function readJsonBody(request: IncomingMessage): Promise<JsonRecord> {
