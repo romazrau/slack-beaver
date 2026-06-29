@@ -33,7 +33,9 @@ Start the Local Agent:
 npm run dev
 ```
 
-When the Local Agent starts, it records a local runtime heartbeat in SQLite. The Slack App Home tab shows whether that heartbeat is online, stale, or not seen yet. The fixed offline guidance is:
+When the Local Agent starts, it records a local runtime heartbeat in SQLite. The Slack App Home tab shows whether that heartbeat is online, stale, or not seen yet. Startup and graceful shutdown also send best-effort Slack lifecycle notices when a target is configured through `LOCAL_AGENT_STATUS_CHANNEL_ID`, `status subscribe`, or a remembered recent conversation.
+
+The fixed offline guidance is:
 
 ```text
 Slack Beaver Local Agent is not reachable from this Slack conversation.
@@ -41,6 +43,20 @@ Start the Local Agent on the configured computer with `npm run dev`, then try ag
 ```
 
 In the current architecture, Slack Socket Mode ingress runs inside the Local Agent process. If that process is fully stopped, Slack events are not received by this repo until the process starts again. A fully automatic Slack reply while the Local Agent is down requires a future always-on Center Server or another Slack ingress service.
+
+## Manage Readable Folders From Slack
+
+`WATCHED_FOLDERS` in `.env` is the bootstrap readable scope. While the Local Agent is running, users can inspect and extend the readable scope from Slack App DM or `/agent`:
+
+```text
+folders list
+folders add /absolute/path/to/folder
+folders remove /absolute/path/to/folder
+status
+status subscribe
+```
+
+Slack-added folders are validated locally, saved in SQLite `allowed_folders`, and merged with `WATCHED_FOLDERS` for search and read tools. Env-provided folders remain controlled by `.env` and cannot be removed from Slack.
 
 Quick manual UAT startup:
 
@@ -145,10 +161,11 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - Slack Socket Mode Local Agent runtime.
 - Local runtime heartbeat status in Slack App Home, with shared fixed offline guidance for unavailable-agent cases.
 - `/agent find <query>` slash command for read-only local file search.
-- Slack App Home and Messages tab support for `find <query>`, `ask <question>`, and natural App DM conversation.
+- Slack App Home and Messages tab support for `find <query>`, `ask <question>`, `folders list/add/remove`, `status`, `status subscribe`, and natural App DM conversation.
 - Allowlisted local folder search for Markdown, text, CSV, and JSON-style local files.
 - Denylist and max-file-size guards for local file access.
 - SQLite local memory for enabled folders, provider setup metadata, conversation turns, summaries, and tool-call summaries.
+- Best-effort Local Agent online/offline Slack lifecycle notices with env, subscribed, or recent-conversation targets.
 - Local-only OpenAI token setup through CLI; token-like Slack messages are refused.
 - Local-only OpenAI model discovery and switching through CLI.
 - Local-only Google OAuth login/status/logout through CLI for read-only Gmail, Drive, and Docs tools.

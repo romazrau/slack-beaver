@@ -72,3 +72,28 @@ Logic changes must add tests for folder command behavior, status formatting,
 target resolution, and lifecycle notice formatting/sending. Manual UAT should
 cover Slack `status`, dynamic folder add/list/remove, startup online notice,
 and graceful shutdown offline notice.
+
+## Implementation Result
+
+Implemented the selected approach.
+
+- Slack deterministic commands now handle readable-scope inspection and dynamic
+  folder grants before natural AI conversation routing.
+- `folders add` reuses local folder validation and saves real paths in SQLite
+  `allowed_folders`.
+- `folders remove` disables only conversation-added folders and refuses to
+  remove env-provided `WATCHED_FOLDERS`.
+- `status subscribe` saves the current Slack conversation as the lifecycle
+  notice target.
+- Startup and graceful shutdown send best-effort online/offline notices after
+  Slack Socket Mode starts, using env target, subscribed target, recent
+  conversation, or local logging when no Slack target exists.
+- `LOCAL_AGENT_STATUS_CHANNEL_ID` is documented as the optional first-start
+  notice target.
+
+Validation passed under Node.js `v22.23.1`:
+
+```sh
+npm test -- tests/agentCommands.test.ts tests/localMemory.test.ts tests/slackApp.test.ts tests/runtimeStatus.test.ts tests/config.test.ts
+npm run typecheck
+```

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { AppConfig } from "../config/config.js";
 import { LocalMemoryStore, mergeUniquePaths } from "../memory/localMemory.js";
 import { writeAuditLog } from "../observability/auditLog.js";
@@ -8,7 +10,15 @@ import {
 } from "../slack/onboardingCopy.js";
 import type { GoogleWorkspaceClient } from "../google/googleWorkspace.js";
 import { formatErrorResponse, formatSearchResponse, parseAgentCommand } from "../slack/slackResponses.js";
+import {
+  buildRuntimeStatusSnapshot,
+  buildRuntimeStatusSnapshotFromStore,
+  formatFoldersResponse,
+  formatStatusResponse,
+  saveRuntimeNoticeTarget
+} from "../slack/runtimeStatus.js";
 import { looksLikeAiToken } from "../setup/secretSetup.js";
+import { validateAllowedFolderInput } from "../setup/folderSetup.js";
 import { runAgentConversation, runAgentQuestion, type AgentModelClient } from "./agentRunner.js";
 import { runLocalSearchTool } from "./toolRegistry.js";
 
@@ -38,15 +48,20 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
     return formatResetMemorySlackGuidance();
   }
 
-  const parsed = parseAgentCommand(input.text);
-  const shouldRunNaturalConversation = parsed.type === "invalid" && input.source === "app_home_message";
-  if (parsed.type === "invalid" && !shouldRunNaturalConversation) {
-    return formatInvalidCommandReason(parsed.reason, input.source);
+  const runtimeCommand = parseRuntimeCommand(input.text);
+  if (runtimeCommand) {
+    return handleRuntimeCommand(runtimeCommand, input);
   }
 
   const memoryStore = input.config.localMemory.enabled
     ? new LocalMemoryStore(input.config.localMemory.dbPath)
     : undefined;
+  const parsed = parseAgentCommand(input.text);
+  const shouldRunNaturalConversation = parsed.type === "invalid" && input.source === "app_home_message";
+  if (parsed.type === "invalid" && !shouldRunNaturalConversation) {
+    memoryStore?.close();
+    return formatInvalidCommandReason(parsed.reason, input.source);
+  }
 
   try {
     const memoryFolders = memoryStore?.listEnabledAllowedFolderPaths() ?? [];
@@ -147,6 +162,125 @@ export async function runAgentTextCommand(input: RunAgentTextCommandInput): Prom
   }
 }
 
+type RuntimeCommand =
+  | { type: "folders_list" }
+  | { type: "folders_add"; folderPath: string }
+  | { type: "folders_remove"; folderPath: string }
+  | { type: "status" }
+  | { type: "status_subscribe" };
+
+async function handleRuntimeCommand(
+  command: RuntimeCommand,
+  input: RunAgentTextCommandInput
+): Promise<string> {
+  const memoryStore = input.config.localMemory.enabled
+    ? new LocalMemoryStore(input.config.localMemory.dbPath)
+    : undefined;
+
+  try {
+    if (command.type === "folders_list") {
+      const snapshot = memoryStore
+        ? buildRuntimeStatusSnapshotFromStore(input.config, memoryStore)
+        : buildRuntimeStatusSnapshot(input.config);
+      return formatFoldersResponse(snapshot);
+    }
+
+    if (command.type === "status") {
+      const snapshot = memoryStore
+        ? buildRuntimeStatusSnapshotFromStore(input.config, memoryStore)
+        : buildRuntimeStatusSnapshot(input.config);
+      return formatStatusResponse(snapshot);
+    }
+
+    if (!memoryStore) {
+      return "Local memory is disabled, so Slack cannot save runtime folder or status settings.";
+    }
+
+    if (command.type === "folders_add") {
+      const validation = await validateAllowedFolderInput(
+        command.folderPath,
+        input.config.localFiles.denylistFolders
+      );
+      if (!validation.ok) {
+        return validation.reason;
+      }
+      memoryStore.upsertAllowedFolder(validation.path);
+      return [
+        "Allowed folder saved for this Local Agent:",
+        `\`${escapeInlineCode(validation.path)}\``,
+        "",
+        "It is now part of the effective readable local-file scope."
+      ].join("\n");
+    }
+
+    if (command.type === "folders_remove") {
+      const resolvedPath = await resolveFolderPathForRemoval(command.folderPath);
+      const removed = memoryStore.disableAllowedFolder(resolvedPath);
+      if (removed) {
+        return `Conversation-added folder disabled: \`${escapeInlineCode(resolvedPath)}\``;
+      }
+
+      const inputPath = path.resolve(command.folderPath.trim());
+      if (
+        input.config.localFiles.watchedFolders.some(
+          (folder) => folder === resolvedPath || folder === inputPath
+        )
+      ) {
+        return "That folder comes from `WATCHED_FOLDERS` and cannot be removed from Slack. Edit local `.env` to change env defaults.";
+      }
+
+      return "No enabled conversation-added folder matched that path.";
+    }
+
+    saveRuntimeNoticeTarget(memoryStore, {
+      channelId: input.channelId,
+      slackUserId: input.slackUserId
+    });
+    return [
+      "Lifecycle notices will be sent to this Slack conversation.",
+      `Channel: \`${escapeInlineCode(input.channelId)}\``
+    ].join("\n");
+  } finally {
+    memoryStore?.close();
+  }
+}
+
+function parseRuntimeCommand(text: string): RuntimeCommand | undefined {
+  const trimmed = text.trim();
+  const [command, subcommand, ...rest] = trimmed.split(/\s+/);
+  const normalizedCommand = command?.toLowerCase();
+  const normalizedSubcommand = subcommand?.toLowerCase();
+
+  if (normalizedCommand === "status" && !normalizedSubcommand) {
+    return { type: "status" };
+  }
+  if (normalizedCommand === "status" && normalizedSubcommand === "subscribe" && rest.length === 0) {
+    return { type: "status_subscribe" };
+  }
+  if (normalizedCommand !== "folders") {
+    return undefined;
+  }
+  if (normalizedSubcommand === "list" && rest.length === 0) {
+    return { type: "folders_list" };
+  }
+  if (normalizedSubcommand === "add") {
+    return { type: "folders_add", folderPath: rest.join(" ").trim() };
+  }
+  if (normalizedSubcommand === "remove") {
+    return { type: "folders_remove", folderPath: rest.join(" ").trim() };
+  }
+  return undefined;
+}
+
+async function resolveFolderPathForRemoval(folderPath: string): Promise<string> {
+  const trimmed = folderPath.trim();
+  try {
+    return path.resolve(await fs.realpath(trimmed));
+  } catch {
+    return path.resolve(trimmed);
+  }
+}
+
 function isResetMemoryRequest(text: string): boolean {
   return text.trim().toLowerCase() === "reset memory";
 }
@@ -159,4 +293,8 @@ function formatInvalidCommandReason(reason: string, source: AgentCommandSource):
   return reason
     .replaceAll("/agent find <query>", "find <query>")
     .replaceAll("/agent ask <question>", "ask <question>");
+}
+
+function escapeInlineCode(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll("`", "'");
 }

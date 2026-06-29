@@ -65,6 +65,7 @@ node -e 'const fs=require("fs"); const s=fs.readFileSync(".env","utf8"); for (co
 SLACK_BOT_TOKEN=xoxb-...
 SLACK_APP_TOKEN=xapp-...
 SLACK_SOCKET_MODE_ENABLED=true
+LOCAL_AGENT_STATUS_CHANNEL_ID=
 
 # Local file access
 WATCHED_FOLDERS=/absolute/path/to/folder-a,/absolute/path/to/folder-b
@@ -157,6 +158,25 @@ npm run agent:folders:add -- /absolute/path/to/folder
 npm run agent:folders:list
 npm run agent:folders:remove -- /absolute/path/to/folder
 ```
+
+While the Local Agent is running, Slack can also manage dynamic readable scope
+without editing `.env`:
+
+```text
+folders list
+folders add /absolute/path/to/folder
+folders remove /absolute/path/to/folder
+status
+status subscribe
+```
+
+`WATCHED_FOLDERS` remains the env-controlled bootstrap scope. Slack-added
+folders are saved in local SQLite memory and merged with env folders. Env
+folders cannot be removed from Slack.
+
+`LOCAL_AGENT_STATUS_CHANNEL_ID` is optional. If it is set, startup and graceful
+shutdown lifecycle notices go there. If it is empty, run `status subscribe` in
+Slack to save the current conversation as the notice target.
 
 AI agent token setup:
 

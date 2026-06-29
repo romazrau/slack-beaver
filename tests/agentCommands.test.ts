@@ -129,6 +129,118 @@ describe("runAgentTextCommand", () => {
     await expect(fs.readFile(config.auditLogPath, "utf8")).rejects.toThrow();
   });
 
+  it("adds, lists, searches, and removes conversation-readable folders", async () => {
+    const fixtureDir = path.join(tempDir, "fixture");
+    await fs.mkdir(fixtureDir);
+    await fs.writeFile(path.join(fixtureDir, "notes.md"), "Dynamic readable scope works.", "utf8");
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+
+    const addResponse = await runAgentTextCommand({
+      text: `folders add ${fixtureDir}`,
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(addResponse).toContain("Allowed folder saved");
+    expect(addResponse).toContain(await fs.realpath(fixtureDir));
+
+    const listResponse = await runAgentTextCommand({
+      text: "folders list",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(listResponse).toContain("*env*: none");
+    expect(listResponse).toContain("*conversation*:");
+    expect(listResponse).toContain(await fs.realpath(fixtureDir));
+
+    const searchResponse = await runAgentTextCommand({
+      text: "find Dynamic readable",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(searchResponse).toContain("Found 1 local file match");
+
+    const removeResponse = await runAgentTextCommand({
+      text: `folders remove ${fixtureDir}`,
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(removeResponse).toContain("Conversation-added folder disabled");
+
+    const afterRemoveResponse = await runAgentTextCommand({
+      text: "find Dynamic readable",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(afterRemoveResponse).toContain("I am initialized");
+  });
+
+  it("does not remove env-provided folders from Slack", async () => {
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+
+    const response = await runAgentTextCommand({
+      text: `folders remove ${tempDir}`,
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(response).toContain("WATCHED_FOLDERS");
+    expect(response).toContain("cannot be removed from Slack");
+  });
+
+  it("reports status and saves lifecycle notice target from Slack", async () => {
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+
+    const subscribeResponse = await runAgentTextCommand({
+      text: "status subscribe",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(subscribeResponse).toContain("Lifecycle notices will be sent");
+    expect(subscribeResponse).toContain("D123");
+
+    const statusResponse = await runAgentTextCommand({
+      text: "status",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config
+    });
+
+    expect(statusResponse).toContain("AI agent token: configured locally");
+    expect(statusResponse).toContain("Google Workspace: connected locally");
+    expect(statusResponse).toContain("Lifecycle notices: subscribed");
+    expect(statusResponse).toContain("folders add /absolute/path/to/folder");
+  });
+
   it("returns OpenAI setup guidance for ask when provider metadata is missing", async () => {
     await fs.writeFile(path.join(tempDir, "notes.md"), "Socket Mode setup", "utf8");
     const config = buildConfig();

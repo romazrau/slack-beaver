@@ -4,8 +4,12 @@ import { runAgentTextCommand } from "../agent/agentCommands.js";
 import type { AppConfig } from "../config/config.js";
 import { LocalMemoryStore, mergeUniquePaths } from "../memory/localMemory.js";
 import { buildAppHomeView } from "./appHomeView.js";
-
-export const LOCAL_AGENT_RUNTIME_PROCESS = "local-agent";
+import {
+  LOCAL_AGENT_RUNTIME_PROCESS,
+  sendRuntimeNotice,
+  type RuntimeNoticeKind,
+  type SlackNoticeClient
+} from "./runtimeStatus.js";
 
 export function createSlackApp(config: AppConfig): SlackBoltApp {
   if (!config.slack.botToken || !config.slack.appToken) {
@@ -102,6 +106,24 @@ export function recordLocalAgentRuntimeHeartbeat(config: AppConfig): void {
   } finally {
     store.close();
   }
+}
+
+export async function sendLocalAgentRuntimeNotice(input: {
+  app: SlackBoltApp;
+  config: AppConfig;
+  kind: RuntimeNoticeKind;
+  logger?: {
+    info?: (message: string) => void;
+    warn?: (message: string) => void;
+    error?: (message: string) => void;
+  };
+}): Promise<void> {
+  await sendRuntimeNotice({
+    client: input.app.client as SlackNoticeClient,
+    config: input.config,
+    kind: input.kind,
+    logger: input.logger
+  });
 }
 
 type SlackMessage = {

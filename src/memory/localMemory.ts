@@ -27,6 +27,13 @@ export type LocalRuntimeStatus = {
   lastSeenAt: string;
 };
 
+export type RecentConversation = {
+  slackUserId: string;
+  channelId: string;
+  threadTs: string | null;
+  updatedAt: string;
+};
+
 export type ToolCallAudit = {
   source: string;
   toolName: string;
@@ -370,6 +377,30 @@ export class LocalMemoryStore {
       }) as ConversationTurn[];
 
     return rows;
+  }
+
+  getMostRecentConversation(): RecentConversation | undefined {
+    const row = this.db
+      .prepare(
+        `select slack_user_id as slackUserId,
+                channel_id as channelId,
+                thread_ts as threadTs,
+                updated_at as updatedAt
+         from conversations
+         order by (
+           select max(id)
+           from conversation_turns
+           where conversation_turns.slack_user_id = conversations.slack_user_id
+             and conversation_turns.channel_id = conversations.channel_id
+             and coalesce(conversation_turns.thread_ts, '') = coalesce(conversations.thread_ts, '')
+         ) desc,
+         updated_at desc,
+         id desc
+         limit 1`
+      )
+      .get() as RecentConversation | undefined;
+
+    return row;
   }
 
   deleteConversationTurns(ids: number[]): void {

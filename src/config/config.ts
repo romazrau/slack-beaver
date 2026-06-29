@@ -5,6 +5,7 @@ export type AppConfig = {
     socketModeEnabled: boolean;
     botToken?: string;
     appToken?: string;
+    statusChannelId?: string;
   };
   localFiles: {
     watchedFolders: string[];
@@ -107,7 +108,8 @@ export function loadConfig(env: Env = process.env, options: LoadConfigOptions = 
     slack: {
       socketModeEnabled,
       botToken: env.SLACK_BOT_TOKEN,
-      appToken: env.SLACK_APP_TOKEN
+      appToken: env.SLACK_APP_TOKEN,
+      statusChannelId: emptyToUndefined(env.LOCAL_AGENT_STATUS_CHANNEL_ID)
     },
     localFiles: {
       watchedFolders,

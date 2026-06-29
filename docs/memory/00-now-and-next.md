@@ -50,6 +50,8 @@
 - Source code now includes Center Server agent registration, heartbeat, `agent_tasks` lifecycle state, claim leases, Center CLI smoke commands, and a one-shot Local Agent worker for `answer_question` tasks.
 - Source code now records a Local Agent runtime heartbeat in SQLite on startup and App Home opens, and Slack App Home displays the runtime as online, stale, or not seen yet.
 - Slack unavailable-agent guidance is centralized as a fixed response formatter, while the current architecture still requires the Local Agent process to be running for Socket Mode events to reach this repo.
+- Source code now includes Slack-native `folders list/add/remove`, `status`, and `status subscribe` commands for explicit dynamic readable-scope management.
+- Local Agent startup and graceful shutdown now send best-effort online/offline Slack lifecycle notices to `LOCAL_AGENT_STATUS_CHANNEL_ID`, a subscribed Slack conversation, or a recent conversation fallback.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
 - Npm scripts now check the active Node major version before loading native SQLite bindings, and Local Agent startup prints AI agent token setup guidance when the token is missing.
@@ -90,6 +92,7 @@
 - Quick UAT startup scripts and guide were added; `tests/uatStartScript.test.ts` covers invalid mode and dry-run resume behavior.
 - Reproducible demo planning was added as documentation only; no application logic changed.
 - Dynamic readable-scope and runtime notice planning was added as documentation only; no application logic changed in this step.
+- Dynamic readable-scope and runtime notice implementation passed focused command, memory, Slack status, runtime notice, and config tests plus typecheck under Node.js `v22.23.1`.
 
 ## Likely Next Work
 
@@ -102,4 +105,4 @@
 - Keep Phase 5 local index cache deferred until v0 Slack-visible UAT and daemon/runbook gaps are closed.
 - Resolve Chrome profile localhost blocking if browser-visible Center Server UAT remains required, then decide whether to add Slack task creation or a polling loop for Remote Task Dispatch.
 - Add structured agent task result metadata before using the multi-agent comparison demo as a stronger comparable-output claim.
-- Implement `folders list/add/remove`, `status`, `status subscribe`, startup online notices, and graceful-shutdown offline notices according to `docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md`.
+- Run live Slack UAT for `folders list/add/remove`, `status subscribe`, restart online notice, and graceful-shutdown offline notice.

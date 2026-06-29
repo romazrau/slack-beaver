@@ -159,3 +159,25 @@ Manual UAT:
 - Send `status subscribe`.
 - Restart the Local Agent and confirm the online notice arrives.
 - Stop the Local Agent with `Ctrl+C` and confirm the offline notice arrives.
+
+## Implementation Result
+
+Implemented.
+
+- Added deterministic Slack/App DM commands for `folders list`, `folders add`,
+  `folders remove`, `status`, and `status subscribe`.
+- Added `LOCAL_AGENT_STATUS_CHANNEL_ID` as an optional first-start lifecycle
+  notice target.
+- Added runtime status snapshot formatting and best-effort startup/offline
+  lifecycle notices.
+- Added local memory support for resolving the most recent Slack conversation as
+  a fallback notice target.
+- Preserved the existing merged readable scope behavior for search/read tools:
+  env `WATCHED_FOLDERS` plus SQLite `allowed_folders`.
+
+Automated validation passed:
+
+```sh
+npm test -- tests/agentCommands.test.ts tests/localMemory.test.ts tests/slackApp.test.ts tests/runtimeStatus.test.ts tests/config.test.ts
+npm run typecheck
+```

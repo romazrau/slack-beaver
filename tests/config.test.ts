@@ -6,6 +6,7 @@ describe("loadConfig", () => {
   it("loads local search config with Slack disabled", () => {
     const config = loadConfig({
       SLACK_SOCKET_MODE_ENABLED: "false",
+      LOCAL_AGENT_STATUS_CHANNEL_ID: "D_STATUS",
       WATCHED_FOLDERS: "/tmp/a,/tmp/b",
       DENYLIST_FOLDERS: "/tmp/a/private",
       MAX_LOCAL_FILE_BYTES: "1234",
@@ -20,6 +21,7 @@ describe("loadConfig", () => {
     });
 
     expect(config.slack.socketModeEnabled).toBe(false);
+    expect(config.slack.statusChannelId).toBe("D_STATUS");
     expect(config.localFiles.watchedFolders).toEqual([path.resolve("/tmp/a"), path.resolve("/tmp/b")]);
     expect(config.localFiles.denylistFolders).toEqual([path.resolve("/tmp/a/private")]);
     expect(config.localFiles.maxFileBytes).toBe(1234);

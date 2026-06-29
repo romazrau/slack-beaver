@@ -118,6 +118,10 @@ describe("LocalMemoryStore", () => {
       }
     ]);
     expect(store.listConversationTurns("U2", "D1")).toHaveLength(1);
+    expect(store.getMostRecentConversation()).toMatchObject({
+      slackUserId: "U1",
+      channelId: "D1"
+    });
 
     store.close();
   });
