@@ -228,5 +228,6 @@ The repository now has a hybrid Local Server plus Center Server foundation:
 - [Dynamic Readable Scope And Runtime Notices](docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md): selected plan for Slack-native folder scope expansion plus Local Agent online/offline notices.
 - [Agent Retrieval Reviewer](docs/repo-goal/14-agent-retrieval-reviewer.md): implemented ambiguity handling and reviewer quality gate for `ask` and App DM answers.
 - [Typed Agent Workflow And Local Observability](docs/repo-goal/15-typed-agent-workflow-and-local-observability.md): typed planner/executor/reviewer workflow and local structured event logs.
+- [Agent Retrieval UAT Hardening](docs/repo-goal/16-agent-retrieval-uat-hardening.md): live Slack UAT findings, root causes, and acceptance criteria for the next retrieval-quality hardening pass.
 - [Project Memory](docs/memory/index.md): implementation decisions, progress notes, validation history, and likely next work.
 - [Agent Instructions](AGENTS.md): repository workflow, testing, documentation, and collaboration rules.

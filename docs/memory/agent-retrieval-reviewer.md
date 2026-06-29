@@ -118,3 +118,30 @@ npm run typecheck
 
 Live Slack/OpenAI UAT remains useful for prompt quality, especially subjective
 selection follow-ups after the first clarification.
+
+## Live Slack UAT Follow-up
+
+Chrome-based Slack UAT after the trace-log change produced clearer evidence.
+
+Confirmed:
+
+- The local trace log records `clarification_follow_up` for the Chinese
+  short-passage flow.
+- The fallback guard prevents the previous raw `00-poc.md` match list from
+  being returned for `安靜`.
+- Deterministic `find` works against the live external fixture folder:
+  `copper umbrella`, `TODO owner Priya`, and `Polar Dawn station` all returned
+  local matches.
+
+Remaining gaps:
+
+- The quiet short-passage flow found `station-rain.txt` and
+  `the-copper-umbrella.md`, but hit the tool-turn limit before reading and
+  selecting a passage.
+- The Priya TODO `ask` flow let reviewer `needs_more_context` guidance surface
+  to Slack instead of forcing another read or returning insufficient context.
+- Search/read ordering still reads search-hint files before the real task files
+  in some agent flows.
+
+The follow-up hardening plan and UAT acceptance criteria are recorded in
+`docs/repo-goal/16-agent-retrieval-uat-hardening.md`.

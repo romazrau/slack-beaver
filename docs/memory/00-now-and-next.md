@@ -105,6 +105,7 @@
 - Agent command regression validation now covers natural conversation guidance for explicit `folders add /absolute/path/to/folder` setup, `confirm folders add /absolute/path/to/folder`, and runtime status context injection.
 - Agent retrieval reviewer validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering ambiguity-first clarification, Chinese clarification follow-up handling, reviewer acceptance, reviewer-requested extra context, reviewer rejection, trace logging, audit safety, and deterministic `find` compatibility.
 - Typed agent workflow and local observability validation passed focused config, plan validation, event log, and agent command tests plus typecheck under Node.js `v22.23.1`.
+- Chrome live Slack UAT for retrieval reviewer follow-up confirmed clarification and trace logging, but found remaining gaps in tool-turn budgeting, reviewer `needs_more_context` handling, and content-file prioritization; the next acceptance criteria are recorded in `docs/repo-goal/16-agent-retrieval-uat-hardening.md`.
 
 ## Likely Next Work
 
@@ -120,3 +121,4 @@
 - Run live Slack UAT for `folders list/add/remove`, `status subscribe`, restart online notice, and graceful-shutdown offline notice.
 - Run live Slack/OpenAI UAT for the agent retrieval reviewer flow, including vague short-passage clarification and reviewer-quality grounded answers.
 - Run live Slack/OpenAI UAT for typed planner/executor/reviewer answers and verify `logs/agent-events/YYYY-MM-DD.jsonl` correlation from a Slack screenshot timestamp.
+- Implement the Agent Retrieval UAT Hardening plan so quiet short-passage and Priya TODO `ask` flows complete search/read/review instead of stopping at fallback or reviewer instructions.
