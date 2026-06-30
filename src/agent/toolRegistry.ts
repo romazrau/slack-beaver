@@ -268,12 +268,12 @@ function buildToolParameters(name: RegisteredToolName) {
           description: "documentId must be non-empty."
         },
         offset: {
-          type: "integer",
+          type: ["integer", "null"],
           minimum: 0,
-          description: "Optional zero-based extracted-text character offset. Use nextOffset from a prior truncated read."
+          description: "Zero-based extracted-text character offset, or null when reading from the beginning. Use nextOffset from a prior truncated read."
         }
       },
-      required: ["documentId"]
+      required: ["documentId", "offset"]
     };
   }
 
@@ -426,7 +426,7 @@ function parseGoogleDriveFileReadInput(
   }
 
   const offset = input.offset;
-  if (offset === undefined) {
+  if (offset === undefined || offset === null) {
     return {
       ok: true,
       documentId: normalizedDocumentId

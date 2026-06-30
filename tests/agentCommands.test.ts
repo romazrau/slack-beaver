@@ -452,6 +452,15 @@ describe("runAgentTextCommand", () => {
           "google_doc_read",
           "google_drive_file_read"
         ]);
+        const driveReadTool = input.tools.find((tool) => tool.name === "google_drive_file_read");
+        expect(driveReadTool?.parameters).toMatchObject({
+          properties: {
+            documentId: { type: "string" },
+            offset: { type: ["integer", "null"] }
+          },
+          required: ["documentId", "offset"],
+          additionalProperties: false
+        });
         expect(input.instructions).toContain("gmail_search");
         return {
           responseId: "resp_1",
@@ -783,7 +792,7 @@ describe("runAgentTextCommand", () => {
               {
                 id: "call_2",
                 name: "google_drive_file_read",
-                input: { documentId: "doc_123" }
+                input: { documentId: "doc_123", offset: null }
               }
             ]
           };
