@@ -12,7 +12,7 @@ import {
   type AgentToolCallResult,
   type ToolExecutionContext
 } from "./toolRegistry.js";
-import { executeAgentPlan } from "./agentPlanExecutor.js";
+import { buildSupplementalReadToolCalls, executeAgentPlan } from "./agentPlanExecutor.js";
 import { parseAgentPlan, type AgentPlan } from "./agentPlan.js";
 import { buildEvidenceLedger, summarizeEvidenceLedger, type EvidenceLedger } from "./evidenceLedger.js";
 import { createOpenAiResponsesModelClient } from "./openAiResponsesClient.js";
@@ -29,6 +29,8 @@ import {
   buildRuntimeStatusSnapshotFromStore,
   type RuntimeStatusSnapshot
 } from "../slack/runtimeStatus.js";
+
+const REVIEWER_SUPPLEMENTAL_READ_MAX = 3;
 
 export type AgentModelInput = {
   question: string;
@@ -894,14 +896,112 @@ async function tryRunTypedAgentWorkflow(input: {
     );
   }
   if (review.decision === "needs_more_context") {
+    const supplementalToolCalls = buildSupplementalReadToolCalls({
+      plan,
+      toolOutputs,
+      maxSupplementalReads: REVIEWER_SUPPLEMENTAL_READ_MAX
+    });
+    const supplementalOutputs: AgentToolCallResult[] = [];
+    for (const toolCall of supplementalToolCalls) {
+      await traceAgentEvent(input, input.traceId, "tool_call_start", {
+        ...summarizeToolCall(toolCall),
+        reviewerSupplementalRead: true
+      });
+      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "tool_call_start", {
+        direction: "output",
+        kind: "tool_call",
+        summary: `Calling ${toolCall.name} after reviewer requested more context.`,
+        payloadRedacted: payloadForMode(input.config, summarizeToolCall(toolCall))
+      });
+      try {
+        const result = await runAgentToolCall(toolCall, toolContext);
+        supplementalOutputs.push(result);
+        await traceAgentEvent(input, input.traceId, "tool_call_result", summarizeToolOutput(result));
+        await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "tool_call_result", {
+          direction: "input",
+          kind: "tool_result",
+          summary: `${result.name} returned ${result.resultCount} result(s).`,
+          payloadRedacted: payloadForMode(input.config, summarizeToolOutput(result))
+        });
+      } catch (error) {
+        const summary = summarizeToolError(toolCall, error);
+        await traceAgentEvent(input, input.traceId, "tool_call_error", summary);
+        await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "tool_call_error", {
+          direction: "error",
+          kind: "tool_error",
+          summary: `${toolCall.name} failed: ${summary.message ?? "Unknown error"}`,
+          payloadRedacted: payloadForMode(input.config, summary)
+        });
+        throw error;
+      }
+    }
+
+    if (supplementalOutputs.length > 0) {
+      const expandedToolOutputs = [...toolOutputs, ...supplementalOutputs];
+      const expandedEvidenceLedger = buildEvidenceLedger(expandedToolOutputs);
+      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "evidence_ledger_updated", {
+        direction: "internal",
+        kind: "evidence",
+        summary: `Evidence ledger has ${expandedEvidenceLedger.items.length} item(s) after reviewer supplemental reads.`,
+        payloadRedacted: payloadForMode(input.config, summarizeEvidenceLedgerForLog(expandedEvidenceLedger))
+      });
+
+      const expandedDraft = await draftTypedAnswer({
+        input,
+        plan,
+        evidenceLedger: expandedEvidenceLedger,
+        toolOutputs: expandedToolOutputs
+      });
+      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "chat", "draft_answer", {
+        direction: "output",
+        kind: "model_response",
+        summary: "Draft answer produced after reviewer supplemental reads.",
+        payloadRedacted: payloadForMode(input.config, { draftAnswer: expandedDraft })
+      });
+
+      const expandedReview = await reviewDraftAnswer({
+        input,
+        question: input.effectiveQuestion,
+        draftAnswer: expandedDraft,
+        gatheredToolOutputs: expandedToolOutputs,
+        plan,
+        evidenceLedger: expandedEvidenceLedger
+      });
+      await traceAgentEvent(input, input.traceId, "reviewer_decision", expandedReview);
+      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "reviewer", "reviewer_decision", {
+        direction: "output",
+        kind: "model_response",
+        summary: `Reviewer decision=${expandedReview.decision} after supplemental reads.`,
+        payloadRedacted: payloadForMode(input.config, expandedReview)
+      });
+
+      if (expandedReview.decision === "accept") {
+        return logTypedWorkflowReply(input, expandedDraft, expandedToolOutputs.length);
+      }
+      if (expandedReview.decision === "ask_user") {
+        return logTypedWorkflowReply(
+          input,
+          expandedReview.message ?? "What kind of result would be most useful here?",
+          expandedToolOutputs.length
+        );
+      }
+      if (expandedReview.decision === "reject_insufficient_context") {
+        return logTypedWorkflowReply(
+          input,
+          expandedReview.message ?? "I could not produce a grounded answer from the configured local context.",
+          expandedToolOutputs.length
+        );
+      }
+    }
+
     await traceAgentEvent(input, input.traceId, "final_answer", {
-      reason: "typed_reviewer_needs_more_context_not_executed",
-      toolCallCount: toolOutputs.length
+      reason: supplementalOutputs.length > 0 ? "typed_reviewer_needs_more_context_after_supplemental_reads" : "typed_reviewer_needs_more_context_not_executed",
+      toolCallCount: toolOutputs.length + supplementalOutputs.length
     });
     return logTypedWorkflowReply(
       input,
       "I found some context, but the configured context was not enough to produce a grounded answer.",
-      toolOutputs.length
+      toolOutputs.length + supplementalOutputs.length
     );
   }
   return logTypedWorkflowReply(

@@ -15,6 +15,10 @@ The third-party `taylorwilsdon/google_workspace_mcp` project remains a possible 
 - Added read-only Gmail, Drive, and Docs tools behind Tool Registry validation.
 - Added `google_drive_file_read` so Drive search results can be read when they
   are native Google Docs or PDFs.
+- `google_doc_read` remains available as a legacy tool name, but it now routes
+  through the Drive file reader so model-selected Drive/PDF IDs are checked via
+  Drive metadata before content is read. This avoids sending non-native-Docs
+  Drive file IDs directly to `docs.documents.get`.
 - Google tools are visible to the model only when `GOOGLE_WORKSPACE_ENABLED=true` and the Google provider is marked connected.
 - Gmail, document, and PDF content is treated as untrusted context and excluded from audit logs.
 - Google Workspace request failures now surface typed diagnostics with service,
@@ -32,6 +36,8 @@ The third-party `taylorwilsdon/google_workspace_mcp` project remains a possible 
 - Google Workspace adapter tests cover Drive search query normalization, bounded
   Google error diagnostics, and one retry for transient request failures.
 - Agent command tests cover Google tool catalog exposure and Gmail search without auditing email content.
+- Agent command tests cover legacy `google_doc_read` calls being fulfilled
+  through `google_drive_file_read` instead of raw Docs API reads.
 - Startup guidance tests cover disabled Google Workspace, missing OAuth client id, missing token, expired token without refresh token, connected metadata sync, and disconnected metadata sync.
 - `npm run typecheck` passed with Node.js 22.
 - `npm test` passed with Node.js 22.

@@ -145,3 +145,23 @@ Remaining gaps:
 
 The follow-up hardening plan and UAT acceptance criteria are recorded in
 `docs/repo-goal/16-agent-retrieval-uat-hardening.md`.
+
+## Supplemental Typed Reads
+
+Follow-up debugging on 2026-06-30 found a typed TODO query where `local_search`
+returned relevant snippets, but the planner selected no `local_file_read` steps.
+The reviewer correctly returned `needs_more_context`, but the typed workflow
+converted that decision directly into an insufficient-context Slack reply.
+
+The typed workflow now performs one bounded supplemental read pass when the
+reviewer asks for more context. Supplemental reads are derived only from
+already-returned search results and use the matching read tool for each source,
+with an explicit reviewer fallback cap of three reads that is independent from
+planner-declared `readPolicy.maxReads`. After those reads, the agent rebuilds
+the evidence ledger, drafts again, and sends the new draft through the reviewer
+once more. If the reviewer still cannot accept the answer, the workflow keeps
+the existing insufficient-context fallback.
+
+This keeps the reviewer from inventing new paths or arbitrary tool work while
+allowing common snippet-only plans, such as TODO searches, to deepen into
+grounded file reads.

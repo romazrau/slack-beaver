@@ -6,14 +6,14 @@ This directory records project decisions, implementation notes, progress, and ne
 
 - `00-now-and-next.md`: Current project state, validation status, and active next phase.
 - `agent-conversation-context-and-tools.md`: Implemented App DM natural conversation, agent-readable tool catalog, and 8-turn context summarization policy.
-- `agent-retrieval-reviewer.md`: Implemented retrieval planning and independent reviewer agent behavior for `ask` and App DM quality control, plus live UAT follow-up gaps and hardening criteria.
+- `agent-retrieval-reviewer.md`: Implemented retrieval planning and independent reviewer agent behavior for `ask` and App DM quality control, plus bounded typed supplemental reads when reviewer context is insufficient.
 - `agent-token-onboarding.md`: Improved README, Slack App Home, and chat guidance for local-only AI agent token setup.
 - `accelerated-local-file-search.md`: Decision to prioritize a local Slack bot file search slice and require a user-run Local Agent process under tighter time constraints.
 - `central-server-todo-planning.md`: Planned Local Server, Center Server, and Center Server DB split with central TODO management as the first shared capability.
 - `doc-test-fixtures.md`: Synthetic local-search fixture corpus for poetry, literature, markets, news-style briefs, conversations, and task lists.
 - `dynamic-readable-scope-and-runtime-notices.md`: Selected design for Slack-native folder scope expansion and proactive Local Agent online/offline notices.
 - `future-hybrid-routing.md`: Future Central Server routing decision for multiple Local Agents while keeping the current POC single-active-agent.
-- `google-workspace-oauth.md`: Local Google OAuth onboarding, restart-time connection guidance, read-only Gmail/Drive/Docs Tool Registry tools, bounded request-error diagnostics, Drive search normalization/retry behavior, and token/audit safety decisions.
+- `google-workspace-oauth.md`: Local Google OAuth onboarding, restart-time connection guidance, read-only Gmail/Drive/Docs Tool Registry tools, Drive metadata-aware file reads, bounded request-error diagnostics, Drive search normalization/retry behavior, and token/audit safety decisions.
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.
 - `local-agent-runtime-status.md`: Local Agent runtime heartbeat, Slack App Home online/stale status, fixed unavailable-agent guidance, and current Slack ingress boundary.
 - `node-runtime-and-native-sqlite.md`: Node.js 22 runtime standardization and `better-sqlite3` native ABI rebuild guidance.

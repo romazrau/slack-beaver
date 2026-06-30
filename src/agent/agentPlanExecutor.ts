@@ -7,6 +7,12 @@ import {
   type ToolExecutionContext
 } from "./toolRegistry.js";
 
+const SEARCH_TO_READ_TOOL: Record<AgentPlanSearchStep["tool"], AgentPlanReadStep["tool"] | undefined> = {
+  local_search: "local_file_read",
+  gmail_search: "gmail_read_message",
+  google_drive_search: "google_drive_file_read"
+};
+
 export type ExecuteAgentPlanOptions = {
   plan: AgentPlan;
   context: ToolExecutionContext;
@@ -51,6 +57,53 @@ export async function executeAgentPlan(input: ExecuteAgentPlanOptions): Promise<
   return outputs;
 }
 
+export function buildSupplementalReadToolCalls(input: {
+  plan: AgentPlan;
+  toolOutputs: AgentToolCallResult[];
+  maxSupplementalReads: number;
+}): AgentToolCallRequest[] {
+  const maxSupplementalReads = Math.min(Math.max(input.maxSupplementalReads, 0), 3);
+  if (maxSupplementalReads === 0) {
+    return [];
+  }
+
+  const alreadyReadTargets = new Set(readTargets(input.toolOutputs));
+  const calls: AgentToolCallRequest[] = [];
+
+  for (const [searchIndex, search] of input.plan.searches.entries()) {
+    const searchOutput = input.toolOutputs.find(
+      (output) => output.callId === `plan_search_${searchIndex + 1}` && output.name === search.tool
+    );
+    if (!searchOutput || searchOutput.resultCount === 0) {
+      continue;
+    }
+
+    const readTool = SEARCH_TO_READ_TOOL[search.tool];
+    if (!readTool) {
+      continue;
+    }
+
+    for (const result of preferredSearchResults(searchOutput.output, search.query)) {
+      if (calls.length >= maxSupplementalReads) {
+        return calls;
+      }
+      const readInput = buildReadInputFromResult(readTool, result);
+      const target = readTargetFromInput(readTool, readInput);
+      if (!readInput || !target || alreadyReadTargets.has(target)) {
+        continue;
+      }
+      alreadyReadTargets.add(target);
+      calls.push({
+        id: `supplemental_read_${calls.length + 1}`,
+        name: readTool,
+        input: readInput
+      });
+    }
+  }
+
+  return calls;
+}
+
 async function runPlanToolCall(
   input: ExecuteAgentPlanOptions,
   toolCall: AgentToolCallRequest
@@ -80,31 +133,90 @@ function buildReadInput(
   if (!firstResult) {
     return undefined;
   }
-  if (read.tool === "local_file_read") {
-    const path = firstString(firstResult.path);
+  return buildReadInputFromResult(read.tool, firstResult);
+}
+
+function buildReadInputFromResult(readTool: AgentPlanReadStep["tool"], result: Record<string, unknown>): unknown | undefined {
+  if (readTool === "local_file_read") {
+    const path = firstString(result.path);
     return path ? { path } : undefined;
   }
-  if (read.tool === "gmail_read_message") {
-    const messageId = firstString(firstResult.messageId);
+  if (readTool === "gmail_read_message") {
+    const messageId = firstString(result.messageId);
     return messageId ? { messageId } : undefined;
   }
-  const documentId = firstString(firstResult.documentId);
+  const documentId = firstString(result.documentId);
   return documentId ? { documentId } : undefined;
 }
 
 function preferredSearchResult(output: string, query?: string): Record<string, unknown> | undefined {
+  return preferredSearchResults(output, query)[0];
+}
+
+function preferredSearchResults(output: string, query?: string): Record<string, unknown>[] {
   try {
     const parsed = JSON.parse(output) as { results?: unknown };
     if (!Array.isArray(parsed.results)) {
-      return undefined;
+      return [];
     }
     const results = parsed.results.filter(
       (result): result is Record<string, unknown> => Boolean(result) && typeof result === "object" && !Array.isArray(result)
     );
-    return results.sort((left, right) => scoreSearchResult(right, query) - scoreSearchResult(left, query))[0];
+    return results.sort((left, right) => scoreSearchResult(right, query) - scoreSearchResult(left, query));
+  } catch {
+    return [];
+  }
+}
+
+function readTargets(outputs: AgentToolCallResult[]): string[] {
+  return outputs.flatMap((output) => {
+    if (output.name === "local_file_read" || output.name === "gmail_read_message" || output.name === "google_doc_read" || output.name === "google_drive_file_read") {
+      const target = readTargetFromOutput(output);
+      return target ? [target] : [];
+    }
+    return [];
+  });
+}
+
+function readTargetFromOutput(output: AgentToolCallResult): string | undefined {
+  try {
+    const parsed = JSON.parse(output.output) as { file?: unknown; message?: unknown; document?: unknown };
+    if (output.name === "local_file_read" && isRecord(parsed.file)) {
+      const filePath = firstString(parsed.file.path);
+      return filePath ? `${output.name}:${filePath}` : undefined;
+    }
+    if (output.name === "gmail_read_message" && isRecord(parsed.message)) {
+      const messageId = firstString(parsed.message.messageId);
+      return messageId ? `${output.name}:${messageId}` : undefined;
+    }
+    if ((output.name === "google_doc_read" || output.name === "google_drive_file_read") && isRecord(parsed.document)) {
+      const documentId = firstString(parsed.document.documentId);
+      return documentId ? googleDriveReadTarget(documentId) : undefined;
+    }
   } catch {
     return undefined;
   }
+  return undefined;
+}
+
+function readTargetFromInput(readTool: AgentPlanReadStep["tool"], input: unknown): string | undefined {
+  if (!isRecord(input)) {
+    return undefined;
+  }
+  if (readTool === "local_file_read") {
+    const filePath = firstString(input.path);
+    return filePath ? `${readTool}:${filePath}` : undefined;
+  }
+  if (readTool === "gmail_read_message") {
+    const messageId = firstString(input.messageId);
+    return messageId ? `${readTool}:${messageId}` : undefined;
+  }
+  const documentId = firstString(input.documentId);
+  return documentId ? googleDriveReadTarget(documentId) : undefined;
+}
+
+function googleDriveReadTarget(documentId: string): string {
+  return `google_drive_file_read:${documentId}`;
 }
 
 function scoreSearchResult(result: Record<string, unknown>, query?: string): number {
@@ -196,4 +308,8 @@ function isLikelyContentPath(locator: string): boolean {
 
 function firstString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

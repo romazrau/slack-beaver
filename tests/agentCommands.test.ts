@@ -840,6 +840,90 @@ describe("runAgentTextCommand", () => {
     expect(auditLine).not.toContain("private doc detail");
   });
 
+  it("routes legacy google_doc_read calls through Google Drive file read", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+    let modelCallCount = 0;
+    let driveFileReadCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        modelCallCount += 1;
+        if (input.purpose === "reviewer") {
+          expect(input.toolOutputs.some((output) => output.name === "google_doc_read")).toBe(true);
+          return reviewerAcceptResponse();
+        }
+
+        if (modelCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [{ id: "call_1", name: "google_drive_search", input: { query: "planning pdf" } }]
+          };
+        }
+
+        if (modelCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [{ id: "call_2", name: "google_doc_read", input: { documentId: "drive_pdf_123" } }]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.output).toContain("PDF body detail");
+        return {
+          responseId: "resp_3",
+          finalAnswer: "The PDF body detail was read through Drive file read.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "Read the planning PDF",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient,
+      googleWorkspaceClient: {
+        async gmailSearch() {
+          throw new Error("not used");
+        },
+        async gmailReadMessage() {
+          throw new Error("not used");
+        },
+        async googleDriveSearch() {
+          return [
+            {
+              documentId: "drive_pdf_123",
+              name: "Planning PDF",
+              mimeType: "application/pdf"
+            }
+          ];
+        },
+        async googleDocRead() {
+          throw new Error("googleDocRead should not be used for legacy google_doc_read tool calls");
+        },
+        async googleDriveFileRead() {
+          driveFileReadCount += 1;
+          return {
+            documentId: "drive_pdf_123",
+            title: "Planning PDF",
+            content: "PDF body detail"
+          };
+        }
+      }
+    });
+
+    expect(response).toContain("PDF body detail");
+    expect(driveFileReadCount).toBe(1);
+  });
+
   it("runs ask with a fake model client and audited local_search tool call", async () => {
     await fs.writeFile(path.join(tempDir, "notes.md"), "Deployment checklist says test first.", "utf8");
     const config = buildConfig();
@@ -2402,6 +2486,89 @@ describe("runAgentTextCommand", () => {
     });
 
     expect(response).toContain("rotate client tokens every Friday");
+  });
+
+  it("performs bounded supplemental local reads with the reviewer fallback cap when typed reviewer needs more context", async () => {
+    await fs.writeFile(path.join(tempDir, "README.md"), "Search hint: TODO owner Priya appears in rollout notes.", "utf8");
+    await fs.writeFile(path.join(tempDir, "q3-rollout.md"), "TODO owner Priya: prepare the partner rollout checklist.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let reviewerCallCount = 0;
+    let draftCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "TODO owner Priya" }],
+              reads: [],
+              readPolicy: { maxReads: 0, reason: "Search first." }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          reviewerCallCount += 1;
+          if (reviewerCallCount === 1) {
+            expect(input.toolOutputs.some((output) => output.name === "local_file_read")).toBe(false);
+            return {
+              responseId: "review_1",
+              finalAnswer: JSON.stringify({
+                decision: "needs_more_context",
+                message: "Read the most relevant local TODO files before answering."
+              }),
+              toolCalls: []
+            };
+          }
+
+          expect(input.toolOutputs.some((output) => output.name === "local_file_read")).toBe(true);
+          return reviewerAcceptResponse();
+        }
+
+        draftCallCount += 1;
+        const readOutput = input.toolOutputs.find((output) => output.name === "local_file_read")?.output ?? "";
+        if (draftCallCount === 1) {
+          expect(readOutput).toBe("");
+          return {
+            responseId: "draft_1",
+            finalAnswer: "A TODO match appears in q3-rollout.md, but the exact content has not been read.",
+            toolCalls: []
+          };
+        }
+
+        expect(readOutput).toContain("q3-rollout.md");
+        expect(readOutput).toContain("partner rollout checklist");
+        return {
+          responseId: "draft_2",
+          finalAnswer: "Priya's TODO is to prepare the partner rollout checklist. Source: q3-rollout.md.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("partner rollout checklist");
+    expect(reviewerCallCount).toBe(2);
+    expect(draftCallCount).toBe(2);
   });
 
   it("does not return typed reviewer needs-more-context instructions to Slack", async () => {
