@@ -27,6 +27,7 @@ coverage/
 
 # Logs and caches
 logs/
+logs2/
 *.log
 .cache/
 .tmp/

@@ -9,6 +9,8 @@ export type AgentTraceEvent = {
     | "clarification_requested"
     | "clarification_follow_up"
     | "retrieval_budget_resolved"
+    | "retrieval_candidate_memory_loaded"
+    | "candidate_seeded_retry"
     | "model_response"
     | "tool_call_start"
     | "tool_call_result"

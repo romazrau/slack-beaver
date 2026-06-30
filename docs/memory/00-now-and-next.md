@@ -34,6 +34,7 @@
 - `docs/repo-goal/15-typed-agent-workflow-and-local-observability.md` defines and records the implemented POC architecture for a typed Chat Orchestrator, Planner, deterministic Executor, evidence ledger, Reviewer workflow, and structured local event logs.
 - `docs/repo-goal/17-agent-retrieval-fallback-optimization.md` defines and records the two-goal optimization plan for reducing generic insufficient-context fallbacks; configured-context reliability is implemented, and public web/Google web search is explicitly out of scope.
 - `docs/repo-goal/18-agent-workflow-state-machine.md` defines and records the first implementation slice of the shared conversation-level workflow state machine for retrieval, future file writing/editing, research organization, and remote task flows.
+- `docs/repo-goal/19-agent-retrieval-candidate-reuse.md` defines and records the implemented hardening for stable reuse of previously found retrieval candidates across Slack turns.
 - `docs/reproducible-demo/` now provides a dedicated repeatable POC demo plan covering local Slack agent operation, Center Server task dispatch, multi-agent comparison, fixture expectations, and evidence capture.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
@@ -45,6 +46,7 @@
 - `docs/memory/dynamic-readable-scope-and-runtime-notices.md` records the decision to keep env folders as bootstrap defaults, store runtime folder grants in SQLite, and send best-effort lifecycle notices to a configured or remembered Slack target.
 - `docs/memory/agent-retrieval-reviewer.md` records the implemented decision to ask first for subjective ambiguous requests, add an independent reviewer agent, and keep `find <query>` deterministic.
 - `docs/memory/agent-retrieval-fallback-optimization.md` records the implemented retrieval fallback optimization and the decision to keep public web/Google web search out of scope.
+- `docs/memory/agent-retrieval-candidate-reuse.md` records the implemented decision to persist safe recent retrieval candidate metadata and use it for bounded follow-up retrieval.
 - `docs/memory/agent-workflow-state-machine.md` records the decision and first implementation result for using a shared workflow state machine instead of a search-only state machine.
 - `docs/memory/typed-agent-workflow-and-local-observability.md` records the POC decision and implementation result for keeping Planner, Executor, Reviewer, and Chat Orchestrator logically separate but inside one Local Agent process, with opt-in full local debug logging and default redacted structured event logs.
 - `projects/local-server`, `projects/center-server`, and `projects/center-server-db` document the project boundaries.
@@ -73,6 +75,7 @@
 - Typed retrieval now handles reviewer `needs_more_context` with one bounded supplemental read pass from already-returned search results before redrafting and reviewing again, and legacy `google_doc_read` calls now route through Drive metadata-aware file reads to avoid sending Drive/PDF IDs directly to the Google Docs API.
 - Clear single-document Google Drive summary or outline requests can now use an internal expanded retrieval budget: Drive file reads may use up to an 80,000-character hard cap and two extra tool turns, while ordinary retrieval stays on the default bounded behavior. Truncated Google Drive reads now return `nextOffset`, and the tool schema allows that offset to continue reading a later bounded segment of the same extracted text.
 - Agent loop trace logs now write ignored JSONL files under `logs/agent-traces/` with effective questions, concrete tool-call inputs, bounded result summaries, `tool_call_error` summaries, fallback reasons, and reviewer decisions for local debugging.
+- Typed retrieval now stores compact recent candidate metadata in App DM conversation memory, loads it as untrusted retrieval hints, seeds bounded Drive title searches after zero-result broad topic retrieval, asks the user to choose when generic follow-ups match multiple Drive candidates, and avoids stale clarification text polluting new retrieval queries.
 - Agent workflow event logs now write ignored JSONL files under `logs/agent-events/` with local time, `traceId`, `turnId`, `conversationId`, Slack metadata when available, planner/executor/reviewer events, and redacted or bounded IO summaries.
 - Slack agent replies now pass through a programmatic Markdown-to-Slack renderer that converts common Markdown headings, bold text, links, dividers, and code spans into Slack-compatible `mrkdwn` Block Kit payloads.
 - Slack App Home and README now show a clearer local-only AI agent token setup path for enabling `ask <question>` and natural AI answers.
@@ -134,6 +137,7 @@
 - Public web boundary validation passed focused `tests/agentCommands.test.ts` and `tests/appHomeView.test.ts` coverage plus `npm run typecheck`, covering disabled public web wording, ordinary web-topic routing through the planner, and App Home capability-boundary guidance.
 - Agent workflow state machine planning was added as documentation only; manual review confirms the shared-state decision covers retrieval, future file writing/editing, research organization, remote task reuse, stopped summaries, and conservative persistence.
 - Agent workflow state machine implementation validation passed focused `tests/agentWorkflowState.test.ts` and `tests/agentCommands.test.ts` coverage plus `npm run typecheck`, covering shared state builders, future mutation confirmation state, and typed retrieval `workflow_state_transition` event logs.
+- Agent retrieval candidate reuse validation passed focused `tests/agentCommands.test.ts`, `tests/agentPlan.test.ts`, and `tests/localMemory.test.ts` coverage plus `npm run typecheck`, covering stale clarification hygiene, recent Drive candidate retry seeding, multi-candidate choice prompts, JSON and legacy tool-call summaries, and candidate trace/event logging.
 
 ## Likely Next Work
 

@@ -126,6 +126,46 @@ describe("LocalMemoryStore", () => {
     store.close();
   });
 
+  it("stores both legacy and JSON tool call summaries on conversation turns", () => {
+    const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
+    const retrievalSummary = {
+      version: 1,
+      toolCallCount: 1,
+      candidates: [
+        {
+          sourceType: "google_drive_file",
+          title: "置身钉内_老鐵備份",
+          locator: "drive_doc_1",
+          fromTool: "google_drive_search"
+        }
+      ]
+    };
+
+    store.appendConversationTurn({
+      slackUserId: "U1",
+      channelId: "D1",
+      userText: "legacy",
+      assistantReply: "legacy reply",
+      source: "app_home_message",
+      toolCallSummary: "tool calls=2"
+    });
+    store.appendConversationTurn({
+      slackUserId: "U1",
+      channelId: "D1",
+      userText: "json",
+      assistantReply: "json reply",
+      source: "app_home_message",
+      toolCallSummary: JSON.stringify(retrievalSummary)
+    });
+
+    expect(store.listConversationTurns("U1", "D1").map((turn) => turn.toolCallSummary)).toEqual([
+      "tool calls=2",
+      JSON.stringify(retrievalSummary)
+    ]);
+
+    store.close();
+  });
+
   it("resets local memory tables and reports deleted counts", () => {
     const store = new LocalMemoryStore(path.join(tempDir, "memory.sqlite"));
 
