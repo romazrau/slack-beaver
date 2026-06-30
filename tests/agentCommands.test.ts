@@ -840,6 +840,215 @@ describe("runAgentTextCommand", () => {
     expect(auditLine).not.toContain("private doc detail");
   });
 
+  it("expands retrieval budget for explicit whole-document Google Drive outlines", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+    let modelCallCount = 0;
+    let driveReadMaxTextChars: number | undefined;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          expect(input.toolOutputs.some((output) => output.name === "google_drive_file_read")).toBe(true);
+          return reviewerAcceptResponse();
+        }
+
+        modelCallCount += 1;
+        if (modelCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "google_drive_search",
+                input: { query: "Outline.pdf" }
+              }
+            ]
+          };
+        }
+
+        if (modelCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [
+              {
+                id: "call_2",
+                name: "google_drive_file_read",
+                input: { documentId: "drive_pdf_123" }
+              }
+            ]
+          };
+        }
+
+        if (modelCallCount === 3) {
+          expect(input.toolOutputs[0]?.output).toContain("Chapter one");
+          return {
+            responseId: "resp_3",
+            toolCalls: [
+              {
+                id: "call_3",
+                name: "google_drive_search",
+                input: { query: "Outline.pdf Chapter two" }
+              }
+            ]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.name).toBe("google_drive_search");
+        return {
+          responseId: "resp_4",
+          finalAnswer: "The outline covers chapter one and chapter two. Source: Outline.pdf.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "*Outline.pdf* 幫我摘要出整篇文章所有大綱",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient,
+      googleWorkspaceClient: {
+        async gmailSearch() {
+          throw new Error("not used");
+        },
+        async gmailReadMessage() {
+          throw new Error("not used");
+        },
+        async googleDriveSearch() {
+          return [
+            {
+              documentId: "drive_pdf_123",
+              name: "Outline.pdf",
+              mimeType: "application/pdf"
+            }
+          ];
+        },
+        async googleDocRead() {
+          throw new Error("not used");
+        },
+        async googleDriveFileRead(_documentId, options) {
+          driveReadMaxTextChars = options?.maxTextChars;
+          return {
+            documentId: "drive_pdf_123",
+            title: "Outline.pdf",
+            content: "Chapter one. Chapter two.",
+            mimeType: "application/pdf",
+            truncated: false
+          };
+        }
+      }
+    });
+
+    expect(driveReadMaxTextChars).toBe(80_000);
+    expect(modelCallCount).toBe(4);
+    expect(response).toContain("chapter one");
+    expect(response).not.toContain("Reply `continue`");
+  });
+
+  it("keeps normal retrieval budget when planner expanded hint does not target one Drive document", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    config.ai.typedWorkflowEnabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+    const driveReadMaxTextChars: Array<number | undefined> = [];
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["google_docs"],
+              searches: [
+                { tool: "google_drive_search", query: "Alpha.pdf" },
+                { tool: "google_drive_search", query: "Beta.pdf" }
+              ],
+              reads: [
+                { tool: "google_drive_file_read", fromSearchIndex: 0 },
+                { tool: "google_drive_file_read", fromSearchIndex: 1 }
+              ],
+              readPolicy: { maxReads: 2, reason: "Need both files." },
+              budgetHint: "expanded_single_document",
+              budgetReason: "Planner incorrectly requested expanded mode."
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          return reviewerAcceptResponse();
+        }
+
+        expect(input.toolOutputs.filter((output) => output.name === "google_drive_file_read")).toHaveLength(2);
+        return {
+          responseId: "draft_1",
+          finalAnswer: "Alpha and Beta were both reviewed from bounded Drive reads.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "請完整摘要 Alpha.pdf 和 Beta.pdf 這兩份文件",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient,
+      googleWorkspaceClient: {
+        async gmailSearch() {
+          throw new Error("not used");
+        },
+        async gmailReadMessage() {
+          throw new Error("not used");
+        },
+        async googleDriveSearch(query) {
+          return [
+            {
+              documentId: query.includes("Alpha") ? "drive_alpha_123" : "drive_beta_123",
+              name: query.includes("Alpha") ? "Alpha.pdf" : "Beta.pdf",
+              mimeType: "application/pdf"
+            }
+          ];
+        },
+        async googleDocRead() {
+          throw new Error("not used");
+        },
+        async googleDriveFileRead(documentId, options) {
+          driveReadMaxTextChars.push(options?.maxTextChars);
+          return {
+            documentId,
+            title: documentId.includes("alpha") ? "Alpha.pdf" : "Beta.pdf",
+            content: `${documentId} bounded content`,
+            mimeType: "application/pdf",
+            truncated: false
+          };
+        }
+      }
+    });
+
+    expect(driveReadMaxTextChars).toEqual([4000, 4000]);
+    expect(response).toContain("Alpha and Beta");
+  });
+
   it("routes legacy google_doc_read calls through Google Drive file read", async () => {
     const config = buildConfig();
     config.localFiles.watchedFolders = [];

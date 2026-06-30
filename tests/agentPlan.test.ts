@@ -44,6 +44,49 @@ describe("validateAgentPlan", () => {
     });
   });
 
+  it("normalizes google_drive source and accepts a planner budget hint", () => {
+    expect(
+      validateAgentPlan({
+        intent: "answer_from_sources",
+        requiresClarification: false,
+        clarifyingQuestion: null,
+        sources: ["google_drive"],
+        searches: [{ tool: "google_drive_search", query: "Outline.pdf" }],
+        reads: [{ tool: "google_drive_file_read", fromSearchIndex: 0 }],
+        readPolicy: { maxReads: 1 },
+        budgetHint: "expanded_single_document",
+        budgetReason: "The user asked for the whole outline."
+      })
+    ).toMatchObject({
+      ok: true,
+      plan: {
+        sources: ["google_docs"],
+        budgetHint: "expanded_single_document",
+        budgetReason: "The user asked for the whole outline."
+      }
+    });
+  });
+
+  it("ignores invalid planner budget hints without expanding the plan", () => {
+    expect(
+      validateAgentPlan({
+        intent: "answer_from_sources",
+        requiresClarification: false,
+        clarifyingQuestion: null,
+        sources: ["google_docs"],
+        searches: [{ tool: "google_drive_search", query: "Outline.pdf" }],
+        reads: [{ tool: "google_drive_file_read", fromSearchIndex: 0 }],
+        readPolicy: { maxReads: 1 },
+        budgetHint: "max_chars_200000"
+      })
+    ).toMatchObject({
+      ok: true,
+      plan: {
+        budgetHint: undefined
+      }
+    });
+  });
+
   it("rejects unknown plan fields and read steps that do not match the search tool", () => {
     expect(
       validateAgentPlan({
@@ -72,6 +115,21 @@ describe("validateAgentPlan", () => {
     ).toMatchObject({
       ok: false,
       reason: "read tool does not match referenced search tool"
+    });
+
+    expect(
+      validateAgentPlan({
+        intent: "answer_from_sources",
+        requiresClarification: false,
+        sources: ["google_docs"],
+        searches: [{ tool: "google_drive_search", query: "Outline.pdf" }],
+        reads: [{ tool: "google_drive_file_read", fromSearchIndex: 0 }],
+        readPolicy: { maxReads: 1 },
+        maxChars: 200000
+      })
+    ).toMatchObject({
+      ok: false,
+      reason: "unexpected plan fields: maxChars"
     });
   });
 

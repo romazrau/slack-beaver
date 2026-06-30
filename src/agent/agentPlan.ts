@@ -1,6 +1,8 @@
 import type { RegisteredToolName } from "./toolRegistry.js";
+import type { RetrievalBudgetMode } from "./retrievalBudget.js";
 
 export type AgentPlanSource = "local_files" | "gmail" | "google_docs";
+type PlannerSourceInput = AgentPlanSource | "google_drive";
 
 export type AgentPlanSearchStep = {
   tool: Extract<RegisteredToolName, "local_search" | "gmail_search" | "google_drive_search">;
@@ -25,6 +27,8 @@ export type AgentPlan = {
   searches: AgentPlanSearchStep[];
   reads: AgentPlanReadStep[];
   readPolicy: AgentReadPolicy;
+  budgetHint?: RetrievalBudgetMode;
+  budgetReason?: string;
 };
 
 const SEARCH_TO_READ_TOOL: Record<AgentPlanSearchStep["tool"], AgentPlanReadStep["tool"] | undefined> = {
@@ -60,7 +64,9 @@ export function validateAgentPlan(value: unknown): { ok: true; plan: AgentPlan }
     "sources",
     "searches",
     "reads",
-    "readPolicy"
+    "readPolicy",
+    "budgetHint",
+    "budgetReason"
   ]);
   const unexpected = Object.keys(value).filter((key) => !allowedKeys.has(key));
   if (unexpected.length > 0) {
@@ -104,6 +110,11 @@ export function validateAgentPlan(value: unknown): { ok: true; plan: AgentPlan }
   if (!reads.ok) {
     return reads;
   }
+  const budgetHint = parseBudgetHint(value.budgetHint);
+  const budgetReason =
+    typeof value.budgetReason === "string" && value.budgetReason.trim()
+      ? value.budgetReason.trim().slice(0, 300)
+      : undefined;
 
   if ((value.requiresClarification || value.intent === "ask_user") && !clarifyingQuestion) {
     return { ok: false, reason: "clarifyingQuestion is required for clarification plans" };
@@ -122,7 +133,9 @@ export function validateAgentPlan(value: unknown): { ok: true; plan: AgentPlan }
       sources: sources.sources,
       searches: searches.searches,
       reads: reads.reads,
-      readPolicy: readPolicy.readPolicy
+      readPolicy: readPolicy.readPolicy,
+      budgetHint,
+      budgetReason
     }
   };
 }
@@ -136,14 +149,26 @@ function parseSources(value: unknown): { ok: true; sources: AgentPlanSource[] } 
   }
   const sources: AgentPlanSource[] = [];
   for (const item of value) {
-    if (item !== "local_files" && item !== "gmail" && item !== "google_docs") {
+    if (item !== "local_files" && item !== "gmail" && item !== "google_docs" && item !== "google_drive") {
       return { ok: false, reason: "sources contains unsupported value" };
     }
-    if (!sources.includes(item)) {
-      sources.push(item);
+    const normalized = normalizeSource(item);
+    if (!sources.includes(normalized)) {
+      sources.push(normalized);
     }
   }
   return { ok: true, sources };
+}
+
+function normalizeSource(value: PlannerSourceInput): AgentPlanSource {
+  return value === "google_drive" ? "google_docs" : value;
+}
+
+function parseBudgetHint(value: unknown): RetrievalBudgetMode | undefined {
+  if (value === "normal" || value === "expanded_single_document") {
+    return value;
+  }
+  return undefined;
 }
 
 function parseSearches(value: unknown): { ok: true; searches: AgentPlanSearchStep[] } | { ok: false; reason: string } {

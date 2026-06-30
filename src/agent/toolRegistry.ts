@@ -6,12 +6,14 @@ import {
 } from "../google/googleWorkspace.js";
 import { LocalMemoryStore } from "../memory/localMemory.js";
 import { readLocalTextFile, searchLocalFiles, type SearchResult } from "../search/localSearch.js";
+import type { RetrievalBudget } from "./retrievalBudget.js";
 
 export type ToolExecutionContext = {
   source: AgentCommandSource;
   config: AppConfig;
   memoryStore?: LocalMemoryStore;
   googleWorkspaceClient?: GoogleWorkspaceClient;
+  retrievalBudget?: RetrievalBudget;
 };
 
 export async function runLocalSearchTool(
@@ -346,8 +348,15 @@ async function runGoogleWorkspaceToolCall(
     recordRejectedToolCall(request, context, input.reason);
     throw new Error(`Rejected ${request.name} tool input: ${input.reason}`);
   }
-  const document = await client.googleDriveFileRead(input.documentId);
-  recordSuccessfulGoogleToolCall(context, request.name, "document id provided", 1);
+  const document = await client.googleDriveFileRead(input.documentId, {
+    maxTextChars: context.retrievalBudget?.googleDriveMaxTextChars
+  });
+  recordSuccessfulGoogleToolCall(
+    context,
+    request.name,
+    `document id provided, retrievalBudget=${context.retrievalBudget?.mode ?? "normal"}, maxTextChars=${context.retrievalBudget?.googleDriveMaxTextChars ?? 4000}, truncated=${document.truncated ?? false}`,
+    1
+  );
   return {
     callId: request.id,
     name: request.name,

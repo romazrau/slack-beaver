@@ -186,6 +186,94 @@ describe("Google Workspace client", () => {
     expect(requestedUrls.some((url) => url.includes("alt=media"))).toBe(true);
   });
 
+  it("uses default and expanded bounds for Google Drive file reads", async () => {
+    const config = buildConfig();
+    await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3600_000,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"]
+    });
+    const docContent = "A".repeat(5000);
+
+    const fetchFn: typeof fetch = async (input) => {
+      const url = input.toString();
+      if (url.includes("fields=id,name,mimeType")) {
+        return jsonResponse({
+          id: "doc_123",
+          name: "Planning Doc",
+          mimeType: "application/vnd.google-apps.document"
+        });
+      }
+      if (url.startsWith("https://docs.googleapis.com/v1/documents/")) {
+        return jsonResponse({
+          title: "Planning Doc",
+          body: {
+            content: [
+              {
+                paragraph: {
+                  elements: [{ textRun: { content: docContent } }]
+                }
+              }
+            ]
+          }
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    const client = await createConfiguredGoogleWorkspaceClient({ config, fetchFn });
+    const defaultDoc = await client.googleDriveFileRead("doc_123");
+    const expandedDoc = await client.googleDriveFileRead("doc_123", { maxTextChars: 6000 });
+
+    expect(defaultDoc.content).toHaveLength(4012);
+    expect(defaultDoc.truncated).toBe(true);
+    expect(expandedDoc.content).toHaveLength(5000);
+    expect(expandedDoc.truncated).toBe(false);
+  });
+
+  it("clamps oversized Google Drive file read bounds to the hard cap", async () => {
+    const config = buildConfig();
+    await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3600_000,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"]
+    });
+    const docContent = "B".repeat(81_000);
+
+    const fetchFn: typeof fetch = async (input) => {
+      const url = input.toString();
+      if (url.includes("fields=id,name,mimeType")) {
+        return jsonResponse({
+          id: "doc_123",
+          name: "Large Doc",
+          mimeType: "application/vnd.google-apps.document"
+        });
+      }
+      if (url.startsWith("https://docs.googleapis.com/v1/documents/")) {
+        return jsonResponse({
+          title: "Large Doc",
+          body: {
+            content: [
+              {
+                paragraph: {
+                  elements: [{ textRun: { content: docContent } }]
+                }
+              }
+            ]
+          }
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    const client = await createConfiguredGoogleWorkspaceClient({ config, fetchFn });
+    const doc = await client.googleDriveFileRead("doc_123", { maxTextChars: 200_000 });
+
+    expect(doc.content).toHaveLength(80_012);
+    expect(doc.truncated).toBe(true);
+    expect(doc.content.endsWith("[truncated]")).toBe(true);
+  });
+
   it("normalizes quoted Google Drive search queries before sending them to Drive", async () => {
     const config = buildConfig();
     await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {

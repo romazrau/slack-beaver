@@ -13,6 +13,7 @@ import {
 } from "./googleAuth.js";
 
 const MAX_TEXT_CHARS = 4000;
+const MAX_DRIVE_FILE_READ_TEXT_CHARS = 80_000;
 const DEFAULT_MAX_RESULTS = 5;
 const GOOGLE_ERROR_BODY_MAX_CHARS = 1000;
 const GOOGLE_RETRY_DELAY_MS = 250;
@@ -78,12 +79,16 @@ export type GoogleDoc = {
   truncated?: boolean;
 };
 
+export type GoogleDriveFileReadOptions = {
+  maxTextChars?: number;
+};
+
 export type GoogleWorkspaceClient = {
   gmailSearch(query: string): Promise<GmailSearchResult[]>;
   gmailReadMessage(messageId: string): Promise<GmailMessage>;
   googleDriveSearch(query: string): Promise<DriveSearchResult[]>;
   googleDocRead(documentId: string): Promise<GoogleDoc>;
-  googleDriveFileRead(documentId: string): Promise<GoogleDoc>;
+  googleDriveFileRead(documentId: string, options?: GoogleDriveFileReadOptions): Promise<GoogleDoc>;
 };
 
 export type GoogleWorkspaceClientOptions = {
@@ -246,7 +251,8 @@ export function createGoogleWorkspaceClient(input: {
       };
     },
 
-    async googleDriveFileRead(documentId) {
+    async googleDriveFileRead(documentId, options) {
+      const maxTextChars = clampDriveFileReadMaxChars(options?.maxTextChars);
       const metadata = await googleFetch<GoogleDriveApiFile>(
         `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentId)}?fields=id,name,mimeType`,
         {
@@ -262,11 +268,13 @@ export function createGoogleWorkspaceClient(input: {
             operation: "docs.documents.get"
           }
         );
+        const content = extractGoogleDocText(doc);
         return {
           documentId,
           title: doc.title ?? metadata.name ?? "Untitled document",
-          content: truncate(extractGoogleDocText(doc)),
-          mimeType: metadata.mimeType
+          content: truncate(content, maxTextChars),
+          mimeType: metadata.mimeType,
+          truncated: content.length > maxTextChars
         };
       }
       if (metadata.mimeType === PDF_MIME_TYPE) {
@@ -277,7 +285,7 @@ export function createGoogleWorkspaceClient(input: {
             operation: "drive.files.get_media"
           }
         );
-        const extracted = await extractPdfText(pdfBytes, MAX_TEXT_CHARS);
+        const extracted = await extractPdfText(pdfBytes, maxTextChars);
         return {
           documentId,
           title: metadata.name ?? "Untitled PDF",
@@ -485,4 +493,14 @@ function decodeBase64Url(value: string): string {
 
 function truncate(value: string, maxChars = MAX_TEXT_CHARS): string {
   return value.length > maxChars ? `${value.slice(0, maxChars)}\n[truncated]` : value;
+}
+
+function clampDriveFileReadMaxChars(value: number | undefined): number {
+  if (value === undefined) {
+    return MAX_TEXT_CHARS;
+  }
+  if (!Number.isFinite(value) || value <= 0) {
+    return MAX_TEXT_CHARS;
+  }
+  return Math.min(Math.floor(value), MAX_DRIVE_FILE_READ_TEXT_CHARS);
 }

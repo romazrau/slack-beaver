@@ -8,6 +8,7 @@ export type AgentTraceEvent = {
     | "agent_loop_start"
     | "clarification_requested"
     | "clarification_follow_up"
+    | "retrieval_budget_resolved"
     | "model_response"
     | "tool_call_start"
     | "tool_call_result"

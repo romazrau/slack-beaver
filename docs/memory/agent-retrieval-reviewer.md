@@ -165,3 +165,28 @@ the existing insufficient-context fallback.
 This keeps the reviewer from inventing new paths or arbitrary tool work while
 allowing common snippet-only plans, such as TODO searches, to deepen into
 grounded file reads.
+
+## Expanded Single-document Retrieval Budget
+
+Live Slack UAT on 2026-06-30 showed that clear requests such as summarizing all
+outlines from one Google Drive PDF hit two separate bounds: the legacy loop
+paused after the normal tool-turn budget, and `google_drive_file_read` only
+returned the default 4000 bounded characters. That was safe, but too shallow for
+a specific whole-document outline request.
+
+The runner now resolves an internal retrieval budget per turn. Normal requests
+keep the existing tool-turn and 4000-character Drive read bounds. Clear
+single-document requests for a complete summary, full outline, or whole-article
+organization can use `expanded_single_document`, either from the typed planner's
+`budgetHint` or from deterministic wording plus an explicit document reference.
+Expanded mode raises Google Drive file reads to an 80,000-character hard cap and
+allows two extra tool turns, with total tool turns capped at six. The model still
+cannot pass `maxChars`, page ranges, or arbitrary budget numbers through tool
+input; the Tool Registry only forwards the app-selected policy.
+
+Trace and event summaries record the selected budget, max Drive read characters,
+and truncation state without logging full document bodies. If the expanded read
+still truncates, draft instructions require the agent to say the answer is based
+on bounded retrieved content and is not guaranteed to cover the full source. A
+future full-document index or segmented summary flow is still needed for very
+large PDFs where complete coverage matters.
