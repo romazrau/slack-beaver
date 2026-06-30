@@ -13,7 +13,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `doc-test-fixtures.md`: Synthetic local-search fixture corpus for poetry, literature, markets, news-style briefs, conversations, and task lists.
 - `dynamic-readable-scope-and-runtime-notices.md`: Selected design for Slack-native folder scope expansion and proactive Local Agent online/offline notices.
 - `future-hybrid-routing.md`: Future Central Server routing decision for multiple Local Agents while keeping the current POC single-active-agent.
-- `google-workspace-oauth.md`: Local Google OAuth onboarding, restart-time connection guidance, read-only Gmail/Drive/Docs Tool Registry tools, and token/audit safety decisions.
+- `google-workspace-oauth.md`: Local Google OAuth onboarding, restart-time connection guidance, read-only Gmail/Drive/Docs Tool Registry tools, bounded request-error diagnostics, Drive search normalization/retry behavior, and token/audit safety decisions.
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.
 - `local-agent-runtime-status.md`: Local Agent runtime heartbeat, Slack App Home online/stale status, fixed unavailable-agent guidance, and current Slack ingress boundary.
 - `node-runtime-and-native-sqlite.md`: Node.js 22 runtime standardization and `better-sqlite3` native ABI rebuild guidance.
@@ -30,5 +30,5 @@ This directory records project decisions, implementation notes, progress, and ne
 - `slack-app-setup-and-uat.md`: Real Slack app setup, secret handling, local daemon operation, runtime fix, and live UAT results for Slack Local File Search v0.
 - `slack-app-home-chat.md`: Decision and implementation notes for Slack-native App Home and Messages tab chat.
 - `slack-markdown-rendering.md`: Programmatic Markdown-to-Slack `mrkdwn` rendering for agent replies, including supported subset and fallback behavior.
-- `typed-agent-workflow-and-local-observability.md`: POC decision to keep Chat Orchestrator, Planner, deterministic Executor, and Reviewer in one Local Agent process while adding structured local event logs and retrieval UAT hardening for bounded final reads, confirmation-gated continuation state, content-file prioritization, and reviewer feedback containment.
+- `typed-agent-workflow-and-local-observability.md`: POC decision to keep Chat Orchestrator, Planner, deterministic Executor, and Reviewer in one Local Agent process while adding structured local event logs and retrieval UAT hardening for bounded final reads, confirmation-gated continuation state, `tool_call_error` traces, content-file prioritization, and reviewer feedback containment.
 - `v0-facts-hardening-results.md`: Results from executing the v0 facts and hardening phase, including fixture UAT, coverage gaps, daemon finding, and Phase 5 deferral.

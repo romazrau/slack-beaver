@@ -12,6 +12,7 @@ export type ExecuteAgentPlanOptions = {
   context: ToolExecutionContext;
   onToolCallStart?: (toolCall: AgentToolCallRequest) => Promise<void>;
   onToolCallResult?: (result: AgentToolCallResult) => Promise<void>;
+  onToolCallError?: (toolCall: AgentToolCallRequest, error: unknown) => Promise<void>;
 };
 
 export async function executeAgentPlan(input: ExecuteAgentPlanOptions): Promise<AgentToolCallResult[]> {
@@ -21,7 +22,7 @@ export async function executeAgentPlan(input: ExecuteAgentPlanOptions): Promise<
   for (const [index, search] of input.plan.searches.entries()) {
     const toolCall = buildSearchToolCall(search, index);
     await input.onToolCallStart?.(toolCall);
-    const result = await runAgentToolCall(toolCall, input.context);
+    const result = await runPlanToolCall(input, toolCall);
     await input.onToolCallResult?.(result);
     outputs.push(result);
     searchOutputs[index] = result;
@@ -42,12 +43,24 @@ export async function executeAgentPlan(input: ExecuteAgentPlanOptions): Promise<
       input: readInput
     };
     await input.onToolCallStart?.(toolCall);
-    const result = await runAgentToolCall(toolCall, input.context);
+    const result = await runPlanToolCall(input, toolCall);
     await input.onToolCallResult?.(result);
     outputs.push(result);
   }
 
   return outputs;
+}
+
+async function runPlanToolCall(
+  input: ExecuteAgentPlanOptions,
+  toolCall: AgentToolCallRequest
+): Promise<AgentToolCallResult> {
+  try {
+    return await runAgentToolCall(toolCall, input.context);
+  } catch (error) {
+    await input.onToolCallError?.(toolCall, error);
+    throw error;
+  }
 }
 
 function buildSearchToolCall(search: AgentPlanSearchStep, index: number): AgentToolCallRequest {

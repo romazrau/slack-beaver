@@ -157,9 +157,16 @@ local memory `settings` with `pending_user_confirmation` status. Clear
 `continue`/`繼續` replies resume directly from that saved pending call with the
 previous response id and gathered tool outputs. Other natural-language replies
 are routed through a no-tool confirmation classifier that returns
-`continue`, `stop`, `unrelated`, or `unclear`; unrelated turns keep the pending
-state for up to five turns, unclear replies ask the user to choose, and stop
-replies clear the saved state.
+`continue`, `stop`, `unrelated`, or `unclear`; unrelated turns now clear the
+pending state and continue as a new request, unclear replies ask the user to
+choose, and stop replies clear the saved state. If a resumed pending tool call
+fails, the saved continuation is cleared so repeated `continue` replies do not
+rerun the same failed tool.
+
+Tool failures now write `tool_call_error` trace events with the tool name,
+sanitized input summary, error name/message, and typed provider diagnostics
+when available. This closes the prior gap where failed tools left only a
+`tool_call_start` entry with no matching result.
 
 Typed reviewer `needs_more_context` decisions are treated as internal control
 signals. Because the typed workflow currently does not execute reviewer-requested
@@ -175,3 +182,5 @@ npm run typecheck
 
 Additional review hardening on 2026-06-29 covered stale continuation risk and
 ordinary docs content ranking with the same focused validation commands.
+Continuation and tool-error observability hardening on 2026-06-30 updated the
+pending-run behavior and added focused `tool_call_error` trace coverage.

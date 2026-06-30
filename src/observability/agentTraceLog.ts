@@ -11,6 +11,7 @@ export type AgentTraceEvent = {
     | "model_response"
     | "tool_call_start"
     | "tool_call_result"
+    | "tool_call_error"
     | "reviewer_decision"
     | "fallback_answer"
     | "final_answer";

@@ -4,7 +4,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AppConfig } from "../src/config/config.js";
 import { saveGoogleOAuthToken } from "../src/google/googleAuth.js";
-import { createConfiguredGoogleWorkspaceClient } from "../src/google/googleWorkspace.js";
+import {
+  GoogleWorkspaceRequestError,
+  createConfiguredGoogleWorkspaceClient
+} from "../src/google/googleWorkspace.js";
 import { LocalMemoryStore } from "../src/memory/localMemory.js";
 import { buildSimplePdf } from "./pdfFixture.js";
 
@@ -182,11 +185,102 @@ describe("Google Workspace client", () => {
     });
     expect(requestedUrls.some((url) => url.includes("alt=media"))).toBe(true);
   });
+
+  it("normalizes quoted Google Drive search queries before sending them to Drive", async () => {
+    const config = buildConfig();
+    await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3600_000,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"]
+    });
+    let requestedUrl = "";
+
+    const fetchFn: typeof fetch = async (input) => {
+      requestedUrl = input.toString();
+      return jsonResponse({ files: [] });
+    };
+
+    const client = await createConfiguredGoogleWorkspaceClient({ config, fetchFn });
+    await client.googleDriveSearch('"外部环境" “2025 年的风向”');
+
+    const url = new URL(requestedUrl);
+    expect(url.searchParams.get("q")).toBe(
+      "trashed = false and (name contains '外部环境 2025 年的风向' or fullText contains '外部环境 2025 年的风向')"
+    );
+  });
+
+  it("includes bounded Google error details when a Google request fails", async () => {
+    const config = buildConfig();
+    await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3600_000,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"]
+    });
+
+    const fetchFn: typeof fetch = async () =>
+      jsonResponse(
+        {
+          error: {
+            code: 500,
+            message: "Internal backend error while processing request",
+            status: "INTERNAL",
+            errors: [{ reason: "backendError", message: "Backend error" }]
+          }
+        },
+        500
+      );
+
+    const client = await createConfiguredGoogleWorkspaceClient({ config, fetchFn });
+    await expect(client.googleDriveSearch("TODO")).rejects.toMatchObject({
+      name: "GoogleWorkspaceRequestError",
+      status: 500,
+      service: "drive",
+      operation: "drive.files.list",
+      googleStatus: "INTERNAL",
+      googleReason: "backendError",
+      googleMessage: "Internal backend error while processing request"
+    });
+    await expect(client.googleDriveSearch("TODO")).rejects.toThrow(
+      "Google Workspace request failed: drive.files.list HTTP 500 (backendError)"
+    );
+  });
+
+  it("retries transient Google request failures once", async () => {
+    const config = buildConfig();
+    await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3600_000,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"]
+    });
+    let callCount = 0;
+
+    const fetchFn: typeof fetch = async () => {
+      callCount += 1;
+      if (callCount === 1) {
+        return jsonResponse({ error: { message: "Rate limited", errors: [{ reason: "rateLimitExceeded" }] } }, 429);
+      }
+      return jsonResponse({
+        files: [
+          {
+            id: "doc_1",
+            name: "TODO",
+            mimeType: "application/vnd.google-apps.document"
+          }
+        ]
+      });
+    };
+
+    const client = await createConfiguredGoogleWorkspaceClient({ config, fetchFn });
+    const results = await client.googleDriveSearch("TODO");
+
+    expect(callCount).toBe(2);
+    expect(results[0]?.documentId).toBe("doc_1");
+  });
 });
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { "content-type": "application/json" }
   });
 }

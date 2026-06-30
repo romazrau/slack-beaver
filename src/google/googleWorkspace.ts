@@ -14,8 +14,41 @@ import {
 
 const MAX_TEXT_CHARS = 4000;
 const DEFAULT_MAX_RESULTS = 5;
+const GOOGLE_ERROR_BODY_MAX_CHARS = 1000;
+const GOOGLE_RETRY_DELAY_MS = 250;
 const GOOGLE_DOC_MIME_TYPE = "application/vnd.google-apps.document";
 const PDF_MIME_TYPE = "application/pdf";
+
+export class GoogleWorkspaceRequestError extends Error {
+  readonly status: number;
+  readonly service: string;
+  readonly operation: string;
+  readonly endpoint: string;
+  readonly googleStatus?: string;
+  readonly googleReason?: string;
+  readonly googleMessage?: string;
+
+  constructor(input: {
+    status: number;
+    service: string;
+    operation: string;
+    endpoint: string;
+    googleStatus?: string;
+    googleReason?: string;
+    googleMessage?: string;
+  }) {
+    const reason = input.googleReason ? ` (${input.googleReason})` : "";
+    super(`Google Workspace request failed: ${input.operation} HTTP ${input.status}${reason}`);
+    this.name = "GoogleWorkspaceRequestError";
+    this.status = input.status;
+    this.service = input.service;
+    this.operation = input.operation;
+    this.endpoint = input.endpoint;
+    this.googleStatus = input.googleStatus;
+    this.googleReason = input.googleReason;
+    this.googleMessage = input.googleMessage;
+  }
+}
 
 export type GmailSearchResult = {
   messageId: string;
@@ -96,10 +129,8 @@ export function createGoogleWorkspaceClient(input: {
 }): GoogleWorkspaceClient {
   const fetchFn = input.fetchFn ?? fetch;
 
-  async function googleFetch<T>(url: string): Promise<T> {
-    let response = await fetchFn(url, {
-      headers: { authorization: `Bearer ${input.token.accessToken}` }
-    });
+  async function googleFetch<T>(url: string, metadata: GoogleRequestMetadata): Promise<T> {
+    let response = await fetchGoogleUrl(url);
 
     if (response.status === 401 && input.config && input.token.refreshToken) {
       input.token = await refreshGoogleOAuthToken({
@@ -108,21 +139,22 @@ export function createGoogleWorkspaceClient(input: {
         fetchFn
       });
       await saveGoogleOAuthToken(input.config.googleWorkspace.tokenPath, input.token);
-      response = await fetchFn(url, {
-        headers: { authorization: `Bearer ${input.token.accessToken}` }
-      });
+      response = await fetchGoogleUrl(url);
+    }
+
+    if (shouldRetryGoogleRequest(response.status)) {
+      await delay(GOOGLE_RETRY_DELAY_MS);
+      response = await fetchGoogleUrl(url);
     }
 
     if (!response.ok) {
-      throw new Error(`Google Workspace request failed: HTTP ${response.status}`);
+      throw await buildGoogleWorkspaceRequestError(response, url, metadata);
     }
     return (await response.json()) as T;
   }
 
-  async function googleFetchBytes(url: string): Promise<Uint8Array> {
-    let response = await fetchFn(url, {
-      headers: { authorization: `Bearer ${input.token.accessToken}` }
-    });
+  async function googleFetchBytes(url: string, metadata: GoogleRequestMetadata): Promise<Uint8Array> {
+    let response = await fetchGoogleUrl(url);
 
     if (response.status === 401 && input.config && input.token.refreshToken) {
       input.token = await refreshGoogleOAuthToken({
@@ -131,15 +163,24 @@ export function createGoogleWorkspaceClient(input: {
         fetchFn
       });
       await saveGoogleOAuthToken(input.config.googleWorkspace.tokenPath, input.token);
-      response = await fetchFn(url, {
-        headers: { authorization: `Bearer ${input.token.accessToken}` }
-      });
+      response = await fetchGoogleUrl(url);
+    }
+
+    if (shouldRetryGoogleRequest(response.status)) {
+      await delay(GOOGLE_RETRY_DELAY_MS);
+      response = await fetchGoogleUrl(url);
     }
 
     if (!response.ok) {
-      throw new Error(`Google Workspace request failed: HTTP ${response.status}`);
+      throw await buildGoogleWorkspaceRequestError(response, url, metadata);
     }
     return new Uint8Array(await response.arrayBuffer());
+  }
+
+  async function fetchGoogleUrl(url: string): Promise<Response> {
+    return fetchFn(url, {
+      headers: { authorization: `Bearer ${input.token.accessToken}` }
+    });
   }
 
   return {
@@ -147,14 +188,21 @@ export function createGoogleWorkspaceClient(input: {
       const url = new URL("https://gmail.googleapis.com/gmail/v1/users/me/messages");
       url.searchParams.set("q", query);
       url.searchParams.set("maxResults", String(DEFAULT_MAX_RESULTS));
-      const list = await googleFetch<{ messages?: Array<{ id: string }> }>(url.toString());
+      const list = await googleFetch<{ messages?: Array<{ id: string }> }>(url.toString(), {
+        service: "gmail",
+        operation: "gmail.messages.list"
+      });
       const messages = list.messages ?? [];
       return Promise.all(messages.map((message) => readGmailMetadata(message.id, googleFetch)));
     },
 
     async gmailReadMessage(messageId) {
       const message = await googleFetch<GmailApiMessage>(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=full`
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=full`,
+        {
+          service: "gmail",
+          operation: "gmail.messages.get"
+        }
       );
       return {
         ...formatGmailMetadata(message),
@@ -163,12 +211,16 @@ export function createGoogleWorkspaceClient(input: {
     },
 
     async googleDriveSearch(query) {
-      const escaped = query.replaceAll("'", "\\'");
+      const normalizedQuery = normalizeDriveSearchQuery(query);
+      const escaped = normalizedQuery.replaceAll("'", "\\'");
       const url = new URL("https://www.googleapis.com/drive/v3/files");
       url.searchParams.set("pageSize", String(DEFAULT_MAX_RESULTS));
       url.searchParams.set("q", `trashed = false and (name contains '${escaped}' or fullText contains '${escaped}')`);
       url.searchParams.set("fields", "files(id,name,mimeType,webViewLink,modifiedTime)");
-      const body = await googleFetch<{ files?: DriveSearchResult[] }>(url.toString());
+      const body = await googleFetch<{ files?: DriveSearchResult[] }>(url.toString(), {
+        service: "drive",
+        operation: "drive.files.list"
+      });
       return (body.files ?? []).map((file) => ({
         documentId: file.documentId ?? (file as unknown as { id: string }).id,
         name: file.name,
@@ -180,7 +232,11 @@ export function createGoogleWorkspaceClient(input: {
 
     async googleDocRead(documentId) {
       const doc = await googleFetch<GoogleDocsApiDocument>(
-        `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}`
+        `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}`,
+        {
+          service: "docs",
+          operation: "docs.documents.get"
+        }
       );
       return {
         documentId,
@@ -192,11 +248,19 @@ export function createGoogleWorkspaceClient(input: {
 
     async googleDriveFileRead(documentId) {
       const metadata = await googleFetch<GoogleDriveApiFile>(
-        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentId)}?fields=id,name,mimeType`
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentId)}?fields=id,name,mimeType`,
+        {
+          service: "drive",
+          operation: "drive.files.get"
+        }
       );
       if (metadata.mimeType === GOOGLE_DOC_MIME_TYPE) {
         const doc = await googleFetch<GoogleDocsApiDocument>(
-          `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}`
+          `https://docs.googleapis.com/v1/documents/${encodeURIComponent(documentId)}`,
+          {
+            service: "docs",
+            operation: "docs.documents.get"
+          }
         );
         return {
           documentId,
@@ -207,7 +271,11 @@ export function createGoogleWorkspaceClient(input: {
       }
       if (metadata.mimeType === PDF_MIME_TYPE) {
         const pdfBytes = await googleFetchBytes(
-          `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentId)}?alt=media`
+          `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentId)}?alt=media`,
+          {
+            service: "drive",
+            operation: "drive.files.get_media"
+          }
         );
         const extracted = await extractPdfText(pdfBytes, MAX_TEXT_CHARS);
         return {
@@ -254,14 +322,120 @@ type GoogleDriveApiFile = {
   mimeType?: string;
 };
 
+type GoogleRequestMetadata = {
+  service: string;
+  operation: string;
+};
+
+type GoogleApiErrorBody = {
+  error?: {
+    code?: number;
+    message?: string;
+    status?: string;
+    errors?: Array<{
+      message?: string;
+      reason?: string;
+    }>;
+  };
+};
+
 async function readGmailMetadata(
   messageId: string,
-  googleFetch: <T>(url: string) => Promise<T>
+  googleFetch: <T>(url: string, metadata: GoogleRequestMetadata) => Promise<T>
 ): Promise<GmailSearchResult> {
   const message = await googleFetch<GmailApiMessage>(
-    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+    {
+      service: "gmail",
+      operation: "gmail.messages.get_metadata"
+    }
   );
   return formatGmailMetadata(message);
+}
+
+async function buildGoogleWorkspaceRequestError(
+  response: Response,
+  url: string,
+  metadata: GoogleRequestMetadata
+): Promise<GoogleWorkspaceRequestError> {
+  const errorBody = parseGoogleApiErrorBody(await boundedResponseText(response));
+  const error = errorBody?.error;
+  const firstError = error?.errors?.find((item) => item.reason || item.message);
+  return new GoogleWorkspaceRequestError({
+    status: response.status,
+    service: metadata.service,
+    operation: metadata.operation,
+    endpoint: redactGoogleEndpoint(url),
+    googleStatus: truncate(error?.status ?? "", 120) || undefined,
+    googleReason: truncate(firstError?.reason ?? "", 120) || undefined,
+    googleMessage: truncate(error?.message ?? firstError?.message ?? "", 300) || undefined
+  });
+}
+
+async function boundedResponseText(response: Response): Promise<string> {
+  try {
+    return truncate(await response.text(), GOOGLE_ERROR_BODY_MAX_CHARS);
+  } catch {
+    return "";
+  }
+}
+
+function parseGoogleApiErrorBody(text: string): GoogleApiErrorBody | undefined {
+  if (!text) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return undefined;
+    }
+    const error = (parsed as { error?: unknown }).error;
+    if (!error || typeof error !== "object" || Array.isArray(error)) {
+      return undefined;
+    }
+    const typedError = error as Record<string, unknown>;
+    const errors = Array.isArray(typedError.errors)
+      ? typedError.errors
+          .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item))
+          .map((item) => ({
+            message: typeof item.message === "string" ? item.message : undefined,
+            reason: typeof item.reason === "string" ? item.reason : undefined
+          }))
+      : undefined;
+    return {
+      error: {
+        code: typeof typedError.code === "number" ? typedError.code : undefined,
+        message: typeof typedError.message === "string" ? typedError.message : undefined,
+        status: typeof typedError.status === "string" ? typedError.status : undefined,
+        errors
+      }
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function redactGoogleEndpoint(url: string): string {
+  const parsed = new URL(url);
+  const redacted = new URL(`${parsed.origin}${parsed.pathname}`);
+  for (const [key, value] of parsed.searchParams.entries()) {
+    redacted.searchParams.append(key, key === "q" ? "[REDACTED_QUERY]" : value);
+  }
+  return redacted.toString();
+}
+
+function shouldRetryGoogleRequest(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+function normalizeDriveSearchQuery(query: string): string {
+  return query.replace(/["“”]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
 function formatGmailMetadata(message: GmailApiMessage): GmailSearchResult {

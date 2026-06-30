@@ -1633,7 +1633,7 @@ describe("runAgentTextCommand", () => {
     expect(continuedResponse).toContain("publish the checklist after QA");
   });
 
-  it("uses a confirmation classifier to keep pending continuation across unrelated natural messages", async () => {
+  it("clears pending continuation when the classifier sees an unrelated natural message", async () => {
     const filePath = path.join(tempDir, "tasks.md");
     const detailsPath = path.join(tempDir, "details.md");
     await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
@@ -1696,11 +1696,19 @@ describe("runAgentTextCommand", () => {
           };
         }
 
-        expect(input.previousResponseId).toBe("resp_3");
-        expect(input.toolOutputs[0]?.name).toBe("local_search");
+        if (mainCallCount === 5) {
+          expect(input.purpose).toBe("conversation");
+          expect(input.toolOutputs).toHaveLength(0);
+          return {
+            responseId: "resp_after_clear",
+            finalAnswer: "No pending continuation remains.",
+            toolCalls: []
+          };
+        }
+
         return {
-          responseId: "resp_5",
-          finalAnswer: "Continued result includes publish the checklist after QA.",
+          responseId: `resp_${mainCallCount}`,
+          finalAnswer: "Unexpected extra answer.",
           toolCalls: []
         };
       }
@@ -1736,7 +1744,7 @@ describe("runAgentTextCommand", () => {
     });
 
     expect(classifierCallCount).toBe(1);
-    expect(continuedResponse).toContain("publish the checklist after QA");
+    expect(continuedResponse).toBe("No pending continuation remains.");
   });
 
   it("clears pending continuation when the user tells the confirmation classifier to stop", async () => {
@@ -1874,7 +1882,7 @@ describe("runAgentTextCommand", () => {
     expect(mainCallCount).toBe(2);
   });
 
-  it("drops a pending continuation after five unrelated classified turns", async () => {
+  it("clears pending continuation when a scope clarification answer starts a new request", async () => {
     const filePath = path.join(tempDir, "tasks.md");
     await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
     const config = buildConfig();
@@ -1910,9 +1918,20 @@ describe("runAgentTextCommand", () => {
           };
         }
 
+        if (mainCallCount === 3) {
+          expect(input.purpose).toBe("conversation");
+          expect(input.toolOutputs).toHaveLength(0);
+          return {
+            responseId: "resp_scope",
+            finalAnswer: "I will search local TODO content only.",
+            toolCalls: []
+          };
+        }
+
+        expect(input.purpose).toBe("conversation");
         return {
-          responseId: `resp_${mainCallCount}`,
-          finalAnswer: `Unrelated answer ${mainCallCount}.`,
+          responseId: "resp_after_scope",
+          finalAnswer: "No old continuation remains.",
           toolCalls: []
         };
       }
@@ -1927,16 +1946,15 @@ describe("runAgentTextCommand", () => {
       modelClient
     });
 
-    for (let index = 0; index < 5; index += 1) {
-      await runAgentTextCommand({
-        text: `Unrelated question ${index + 1}`,
-        slackUserId: "U123",
-        channelId: "D123",
-        source: "app_home_message",
-        config,
-        modelClient
-      });
-    }
+    const scopeResponse = await runAgentTextCommand({
+      text: "本機",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+    expect(scopeResponse).toBe("I will search local TODO content only.");
 
     const continueResponse = await runAgentTextCommand({
       text: "continue",
@@ -1947,7 +1965,93 @@ describe("runAgentTextCommand", () => {
       modelClient
     });
 
-    expect(continueResponse).toBe("Unrelated answer 8.");
+    expect(continueResponse).toBe("No old continuation remains.");
+  });
+
+  it("clears continuation state and writes tool_call_error when resumed pending tool fails", async () => {
+    const filePath = path.join(tempDir, "tasks.md");
+    await fs.writeFile(filePath, "TODO owner Priya: update the rollout runbook.", "utf8");
+    const config = buildConfig();
+    config.localMemory.enabled = true;
+    config.ai.maxToolTurns = 1;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let mainCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        mainCallCount += 1;
+        if (mainCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [{ id: "call_1", name: "local_search", input: { query: "TODO owner Priya" } }]
+          };
+        }
+
+        if (mainCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [{ id: "call_2", name: "local_file_read", input: { path: filePath } }]
+          };
+        }
+
+        if (mainCallCount === 3) {
+          return {
+            responseId: "resp_3",
+            toolCalls: [{ id: "call_3", name: "local_search", input: { query: "/Users/example/.ssh/id_rsa" } }]
+          };
+        }
+
+        expect(input.purpose).toBe("conversation");
+        expect(input.toolOutputs).toHaveLength(0);
+        return {
+          responseId: "resp_after_error",
+          finalAnswer: "No failed continuation remains.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const firstResponse = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+    expect(firstResponse).toContain("Reply `continue`");
+
+    const failedResponse = await runAgentTextCommand({
+      text: "continue",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+    expect(failedResponse).toContain("Local agent failed");
+
+    const traceContent = await fs.readFile(path.join(path.dirname(config.auditLogPath), "agent-traces", "2026-06-30.jsonl"), "utf8").catch(async () => {
+      const traceDir = path.join(path.dirname(config.auditLogPath), "agent-traces");
+      const [traceFile] = await fs.readdir(traceDir);
+      return fs.readFile(path.join(traceDir, traceFile), "utf8");
+    });
+    expect(traceContent).toContain("\"event\":\"tool_call_error\"");
+    expect(traceContent).toContain("\"name\":\"local_search\"");
+    expect(traceContent).not.toContain("sk-test-secret-token");
+
+    const secondContinueResponse = await runAgentTextCommand({
+      text: "continue",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(secondContinueResponse).toBe("No failed continuation remains.");
   });
 
   it("clears continuation state when resumed review reaches the context limit", async () => {

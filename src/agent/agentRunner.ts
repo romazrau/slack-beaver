@@ -122,8 +122,6 @@ type AgentContinuationState = {
 
 type ContinuationConfirmationDecision = "continue" | "stop" | "unrelated" | "unclear";
 
-const MAX_IGNORED_CONTINUATION_TURNS = 5;
-
 export async function runAgentQuestion(input: RunAgentQuestionInput): Promise<{
   answer: string;
   toolCallCount: number;
@@ -259,24 +257,31 @@ export async function runAgentContinuation(input: {
     throw error;
   }
 
-  return runAgentLoop({
-    question: state.question,
-    source: state.source,
-    config: input.config,
-    memoryStore: input.memoryStore,
-    modelClient,
-    googleWorkspaceClient: input.googleWorkspaceClient,
-    purpose: state.purpose,
-    instructions: state.instructions,
-    conversationContext: [],
-    observability: input.observability,
-    continuationIdentity: {
-      slackUserId: input.slackUserId,
-      channelId: input.channelId,
-      threadTs: input.threadTs
-    },
-    resumeState: state
-  });
+  const continuationIdentity = {
+    slackUserId: input.slackUserId,
+    channelId: input.channelId,
+    threadTs: input.threadTs
+  };
+
+  try {
+    return await runAgentLoop({
+      question: state.question,
+      source: state.source,
+      config: input.config,
+      memoryStore: input.memoryStore,
+      modelClient,
+      googleWorkspaceClient: input.googleWorkspaceClient,
+      purpose: state.purpose,
+      instructions: state.instructions,
+      conversationContext: [],
+      observability: input.observability,
+      continuationIdentity,
+      resumeState: state
+    });
+  } catch (error) {
+    clearAgentContinuationState(input.memoryStore, continuationIdentity);
+    throw error;
+  }
 }
 
 export async function handleAgentContinuationReply(input: {
@@ -333,17 +338,8 @@ export async function handleAgentContinuationReply(input: {
     };
   }
 
-  const updatedIgnoredTurnCount = state.ignoredTurnCount + 1;
-  if (updatedIgnoredTurnCount >= MAX_IGNORED_CONTINUATION_TURNS) {
-    clearAgentContinuationState(input.memoryStore, identity);
-    return { continueNormal: true, preserveContinuationOnTerminal: false };
-  }
-
-  saveAgentContinuationState(input.memoryStore, identity, {
-    ...state,
-    ignoredTurnCount: updatedIgnoredTurnCount
-  });
-  return { continueNormal: true, preserveContinuationOnTerminal: true };
+  clearAgentContinuationState(input.memoryStore, identity);
+  return { continueNormal: true, preserveContinuationOnTerminal: false };
 }
 
 function classifyDeterministicContinuationReply(text: string): ContinuationConfirmationDecision | undefined {
@@ -529,7 +525,7 @@ async function runAgentLoop(input: {
         ...summarizeToolCall(toolCall),
         continuedFromPause: true
       });
-      const result = await runAgentToolCall(toolCall, toolContext);
+      const result = await runTracedAgentToolCall(input, traceId, toolCall, toolContext);
       await traceAgentEvent(input, traceId, "tool_call_result", summarizeToolOutput(result));
       toolOutputs.push(result);
       gatheredToolOutputs.push(result);
@@ -676,7 +672,7 @@ async function runAgentLoop(input: {
             ...summarizeToolCall(toolCall),
             finalReadAllowance: true
           });
-          const result = await runAgentToolCall(toolCall, toolContext);
+          const result = await runTracedAgentToolCall(input, traceId, toolCall, toolContext);
           await traceAgentEvent(input, traceId, "tool_call_result", summarizeToolOutput(result));
           toolOutputs.push(result);
           gatheredToolOutputs.push(result);
@@ -724,7 +720,7 @@ async function runAgentLoop(input: {
     for (const toolCall of response.toolCalls) {
       executedToolCallSignatures.add(buildToolCallSignature(toolCall));
       await traceAgentEvent(input, traceId, "tool_call_start", summarizeToolCall(toolCall));
-      const result = await runAgentToolCall(toolCall, toolContext);
+      const result = await runTracedAgentToolCall(input, traceId, toolCall, toolContext);
       await traceAgentEvent(input, traceId, "tool_call_result", summarizeToolOutput(result));
       toolOutputs.push(result);
       gatheredToolOutputs.push(result);
@@ -829,6 +825,16 @@ async function tryRunTypedAgentWorkflow(input: {
         kind: "tool_result",
         summary: `${result.name} returned ${result.resultCount} result(s).`,
         payloadRedacted: payloadForMode(input.config, summarizeToolOutput(result))
+      });
+    },
+    onToolCallError: async (toolCall, error) => {
+      const summary = summarizeToolError(toolCall, error);
+      await traceAgentEvent(input, input.traceId, "tool_call_error", summary);
+      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "tool_call_error", {
+        direction: "error",
+        kind: "tool_error",
+        summary: `${toolCall.name} failed: ${summary.message ?? "Unknown error"}`,
+        payloadRedacted: payloadForMode(input.config, summary)
       });
     }
   });
@@ -1652,6 +1658,24 @@ function containsCjkText(value: string): boolean {
   return /[\u3400-\u9fff]/.test(value);
 }
 
+async function runTracedAgentToolCall(
+  input: {
+    source: AgentCommandSource;
+    config: AppConfig;
+    purpose: "question" | "conversation";
+  },
+  traceId: string,
+  toolCall: AgentToolCallRequest,
+  toolContext: ToolExecutionContext
+): Promise<AgentToolCallResult> {
+  try {
+    return await runAgentToolCall(toolCall, toolContext);
+  } catch (error) {
+    await traceAgentEvent(input, traceId, "tool_call_error", summarizeToolError(toolCall, error));
+    throw error;
+  }
+}
+
 async function traceAgentEvent(
   input: {
     source: AgentCommandSource;
@@ -1737,6 +1761,53 @@ function summarizeToolCall(toolCall: AgentToolCallRequest): Record<string, unkno
     name: toolCall.name,
     input: toolCall.input
   };
+}
+
+function summarizeToolError(toolCall: AgentToolCallRequest, error: unknown): Record<string, unknown> {
+  const record = error && typeof error === "object" ? (error as Record<string, unknown>) : {};
+  const message = error instanceof Error ? error.message : "Unknown error";
+  return {
+    callId: toolCall.id,
+    name: toolCall.name,
+    input: summarizeToolInputForError(toolCall.input),
+    errorName: error instanceof Error ? error.name : "UnknownError",
+    message: redactDiagnosticString(message),
+    status: typeof record.status === "number" ? record.status : undefined,
+    service: typeof record.service === "string" ? record.service : undefined,
+    operation: typeof record.operation === "string" ? record.operation : undefined,
+    endpoint: typeof record.endpoint === "string" ? redactDiagnosticString(record.endpoint) : undefined,
+    googleStatus: typeof record.googleStatus === "string" ? redactDiagnosticString(record.googleStatus) : undefined,
+    googleReason: typeof record.googleReason === "string" ? redactDiagnosticString(record.googleReason) : undefined,
+    googleMessage: typeof record.googleMessage === "string" ? redactDiagnosticString(record.googleMessage) : undefined
+  };
+}
+
+function summarizeToolInputForError(input: unknown): unknown {
+  if (typeof input === "string") {
+    return redactDiagnosticString(input);
+  }
+  if (Array.isArray(input)) {
+    return input.map((item) => summarizeToolInputForError(item));
+  }
+  if (input && typeof input === "object") {
+    return Object.fromEntries(
+      Object.entries(input).map(([key, value]) => [
+        key,
+        /token|secret|password|api[_-]?key|private[_-]?key/i.test(key) ? "[REDACTED]" : summarizeToolInputForError(value)
+      ])
+    );
+  }
+  return input;
+}
+
+function redactDiagnosticString(value: string): string {
+  return value
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [REDACTED]")
+    .replace(/access_token=[^&\s]+/gi, "access_token=[REDACTED]")
+    .replace(/refresh_token=[^&\s]+/gi, "refresh_token=[REDACTED]")
+    .replace(/sk-[A-Za-z0-9_-]{12,}/g, "[REDACTED_OPENAI_TOKEN]")
+    .replace(/xox[abpors]-[A-Za-z0-9-]{12,}/g, "[REDACTED_SLACK_TOKEN]")
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]");
 }
 
 function summarizeToolOutput(output: AgentToolCallResult): Record<string, unknown> {
