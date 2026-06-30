@@ -32,6 +32,7 @@
 - `docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md` now defines the selected method for Slack-native readable-scope expansion and proactive Local Agent lifecycle notices.
 - `docs/repo-goal/14-agent-retrieval-reviewer.md` defines and records the implemented retrieval planning and independent reviewer quality gate for `ask` and natural App DM answers.
 - `docs/repo-goal/15-typed-agent-workflow-and-local-observability.md` defines and records the implemented POC architecture for a typed Chat Orchestrator, Planner, deterministic Executor, evidence ledger, Reviewer workflow, and structured local event logs.
+- `docs/repo-goal/17-agent-retrieval-fallback-optimization.md` defines the next two-goal optimization plan for reducing generic insufficient-context fallbacks: current configured-context reliability first, public web search boundary second.
 - `docs/reproducible-demo/` now provides a dedicated repeatable POC demo plan covering local Slack agent operation, Center Server task dispatch, multi-agent comparison, fixture expectations, and evidence capture.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
@@ -42,6 +43,7 @@
 - `docs/memory/remote-task-dispatch-planning.md` records the implemented first step for durable remote task dispatch without moving local files or credentials into Center Server.
 - `docs/memory/dynamic-readable-scope-and-runtime-notices.md` records the decision to keep env folders as bootstrap defaults, store runtime folder grants in SQLite, and send best-effort lifecycle notices to a configured or remembered Slack target.
 - `docs/memory/agent-retrieval-reviewer.md` records the implemented decision to ask first for subjective ambiguous requests, add an independent reviewer agent, and keep `find <query>` deterministic.
+- `docs/memory/agent-retrieval-fallback-optimization.md` records the decision to optimize multi-turn clarification, query hygiene, zero-result retry, and fallback wording before deciding whether to add public web search.
 - `docs/memory/typed-agent-workflow-and-local-observability.md` records the POC decision and implementation result for keeping Planner, Executor, Reviewer, and Chat Orchestrator logically separate but inside one Local Agent process, with opt-in full local debug logging and default redacted structured event logs.
 - `projects/local-server`, `projects/center-server`, and `projects/center-server-db` document the project boundaries.
 - Source code now includes `src/center-db`, `src/center-server`, and `src/cli/centerCli.ts` for central TODO persistence, HTTP API, and local smoke commands.
@@ -142,3 +144,5 @@
 - Run live Slack/OpenAI UAT for the agent retrieval reviewer flow, including vague short-passage clarification and reviewer-quality grounded answers.
 - Run live Slack/OpenAI UAT for typed planner/executor/reviewer answers and verify `logs/agent-events/YYYY-MM-DD.jsonl` correlation from a Slack screenshot timestamp.
 - Re-run live Slack UAT for the Agent Retrieval UAT Hardening cases and compare Slack-visible replies with `logs/agent-traces/YYYY-MM-DD.jsonl` and `logs/agent-events/YYYY-MM-DD.jsonl`.
+- Implement the first goal in `docs/repo-goal/17-agent-retrieval-fallback-optimization.md`: multi-turn retrieval clarification state, non-OR query variants, zero-result retry, and clearer configured-source fallback wording.
+- Decide the second goal in `docs/repo-goal/17-agent-retrieval-fallback-optimization.md`: whether public web search is supported or explicitly out of scope.
