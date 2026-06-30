@@ -152,6 +152,9 @@ Live Slack UAT should include:
   searched, not expose internal planner details by default.
 - Preserve full traceability in `logs/agent-events` and `logs/agent-traces` so
   screenshots can be correlated with exact planner and tool decisions.
+- Broader stop, continue, choose, and act decisions are planned in
+  `docs/repo-goal/18-agent-workflow-state-machine.md` as a shared workflow
+  state machine rather than a search-only state machine.
 
 ## Implementation Result
 
