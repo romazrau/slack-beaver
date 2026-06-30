@@ -3400,8 +3400,134 @@ describe("runAgentTextCommand", () => {
       modelClient
     });
 
-    expect(response).toContain("not enough to produce a grounded answer");
+    expect(response).toContain("partial configured context");
+    expect(response).toContain("local files");
     expect(response).not.toContain("Read week-27.json");
+    expect(response).not.toContain("Draft that should not pass review");
+  });
+
+  it("returns a partial context summary when reviewer still needs more context after supplemental reads", async () => {
+    await fs.writeFile(path.join(tempDir, "q3-rollout.md"), "TODO owner Priya: prepare the partner rollout checklist.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+    let reviewerCallCount = 0;
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "TODO owner Priya" }],
+              reads: [],
+              readPolicy: { maxReads: 0, reason: "Search first." }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          reviewerCallCount += 1;
+          return {
+            responseId: `review_${reviewerCallCount}`,
+            finalAnswer: JSON.stringify({
+              decision: "needs_more_context",
+              message: "Need another source before confirming."
+            }),
+            toolCalls: []
+          };
+        }
+
+        return {
+          responseId: "draft_1",
+          finalAnswer: "Draft that should not pass review.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask In local files, what TODO mentions owner Priya?",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("partial configured context");
+    expect(response).toContain("local file read (1)");
+    expect(response).not.toContain("Need another source");
+    expect(response).not.toContain("Draft that should not pass review");
+    expect(reviewerCallCount).toBe(2);
+  });
+
+  it("summarizes why it stopped and gives next steps for Chinese retrieval requests", async () => {
+    await fs.writeFile(path.join(tempDir, "ai-note.md"), "AI article candidate.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "AI" }],
+              reads: [],
+              readPolicy: { maxReads: 0 }
+            }),
+            toolCalls: []
+          };
+        }
+
+        if (input.purpose === "reviewer") {
+          return {
+            responseId: "review_1",
+            finalAnswer: JSON.stringify({
+              decision: "needs_more_context",
+              message: "Need another source before confirming."
+            }),
+            toolCalls: []
+          };
+        }
+
+        return {
+          responseId: "draft_1",
+          finalAnswer: "Draft that should not pass review.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "幫我用 AI 找文章",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("我先停在這裡");
+    expect(response).toContain("停止原因");
+    expect(response).toContain("下一步");
     expect(response).not.toContain("Draft that should not pass review");
   });
 

@@ -92,11 +92,41 @@ describe("validateAgentPlan", () => {
         sources: ["google_docs", "local_files", "gmail"],
         searches: [
           { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
-          { tool: "local_search", query: "AI transformation impact on developers article" },
+          { tool: "gmail_search", query: "\"AI\" \"developers\"" },
           { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
-          { tool: "google_drive_search", query: "AI transformation impact developers" },
-          { tool: "gmail_search", query: "\"AI\" \"developers\"" }
+          { tool: "local_search", query: "AI transformation impact on developers article" },
+          { tool: "google_drive_search", query: "AI transformation impact developers" }
         ]
+      }
+    });
+  });
+
+  it("keeps a Google Drive search when earlier local and Gmail variants exceed the search cap", () => {
+    const result = validateAgentPlan({
+      intent: "answer_from_sources",
+      requiresClarification: false,
+      clarifyingQuestion: null,
+      sources: ["local_files", "gmail", "google_drive"],
+      searches: [
+        { tool: "local_search", query: "AI transformation software developers" },
+        { tool: "local_search", query: "generative AI impact developers" },
+        { tool: "local_search", query: "生成式 AI 軟體開發者 影響" },
+        { tool: "gmail_search", query: "AI transformation software developers" },
+        { tool: "gmail_search", query: "generative AI impact developers" },
+        { tool: "google_drive_search", query: "AI transformation software developers" }
+      ],
+      reads: [],
+      readPolicy: { maxReads: 0 }
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        searches: expect.arrayContaining([
+          { tool: "local_search", query: "AI transformation software developers" },
+          { tool: "gmail_search", query: "AI transformation software developers" },
+          { tool: "google_drive_search", query: "AI transformation software developers" }
+        ])
       }
     });
   });
@@ -178,10 +208,10 @@ describe("validateAgentPlan", () => {
       plan: {
         searches: [
           { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
-          { tool: "local_search", query: "AI transformation impact on developers article" },
+          { tool: "gmail_search", query: "\"AI\" \"developers\"" },
           { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
-          { tool: "google_drive_search", query: "AI transformation impact developers" },
-          { tool: "gmail_search", query: "\"AI\" \"developers\"" }
+          { tool: "local_search", query: "AI transformation impact on developers article" },
+          { tool: "google_drive_search", query: "AI transformation impact developers" }
         ],
         reads: []
       }
@@ -363,6 +393,47 @@ describe("buildSupplementalReadToolCalls", () => {
         maxSupplementalReads: 1
       })
     ).toEqual([{ id: "supplemental_read_1", name: "local_file_read", input: { path: "one.md" } }]);
+  });
+
+  it("prioritizes reviewer-requested Google Drive reads over earlier local search results", () => {
+    const plan: AgentPlan = {
+      intent: "answer_from_sources",
+      requiresClarification: false,
+      sources: ["local_files", "google_docs"],
+      searches: [
+        { tool: "local_search", query: "AI" },
+        { tool: "google_drive_search", query: "AI" }
+      ],
+      reads: [],
+      readPolicy: { maxReads: 0 }
+    };
+    const toolOutputs: AgentToolCallResult[] = [
+      {
+        callId: "plan_search_1",
+        name: "local_search",
+        output: JSON.stringify({
+          results: [{ path: "local.md", filename: "local.md", snippet: "AI local note" }]
+        }),
+        resultCount: 1
+      },
+      {
+        callId: "plan_search_2",
+        name: "google_drive_search",
+        output: JSON.stringify({
+          results: [{ documentId: "drive_doc_1", name: "AI Article.pdf", mimeType: "application/pdf" }]
+        }),
+        resultCount: 1
+      }
+    ];
+
+    expect(
+      buildSupplementalReadToolCalls({
+        plan,
+        toolOutputs,
+        maxSupplementalReads: 1,
+        preferredReadTools: ["google_drive_file_read"]
+      })
+    ).toEqual([{ id: "supplemental_read_1", name: "google_drive_file_read", input: { documentId: "drive_doc_1" } }]);
   });
 
   it("dedupes legacy google_doc_read and google_drive_file_read by Drive file identity", () => {

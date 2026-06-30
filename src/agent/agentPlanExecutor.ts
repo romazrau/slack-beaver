@@ -63,6 +63,7 @@ export function buildSupplementalReadToolCalls(input: {
   toolOutputs: AgentToolCallResult[];
   maxSupplementalReads: number;
   searchCallIdPrefix?: string;
+  preferredReadTools?: AgentPlanReadStep["tool"][];
 }): AgentToolCallRequest[] {
   const maxSupplementalReads = Math.min(Math.max(input.maxSupplementalReads, 0), 3);
   if (maxSupplementalReads === 0) {
@@ -72,7 +73,7 @@ export function buildSupplementalReadToolCalls(input: {
   const alreadyReadTargets = new Set(readTargets(input.toolOutputs));
   const calls: AgentToolCallRequest[] = [];
 
-  for (const [searchIndex, search] of input.plan.searches.entries()) {
+  for (const { search, searchIndex } of orderSearchesForSupplementalReads(input.plan.searches, input.preferredReadTools)) {
     const searchOutput = input.toolOutputs.find(
       (output) => output.callId === `${input.searchCallIdPrefix ?? ""}plan_search_${searchIndex + 1}` && output.name === search.tool
     );
@@ -104,6 +105,23 @@ export function buildSupplementalReadToolCalls(input: {
   }
 
   return calls;
+}
+
+function orderSearchesForSupplementalReads(
+  searches: AgentPlanSearchStep[],
+  preferredReadTools: AgentPlanReadStep["tool"][] = []
+): Array<{ search: AgentPlanSearchStep; searchIndex: number }> {
+  const indexed = searches.map((search, searchIndex) => ({ search, searchIndex }));
+  if (preferredReadTools.length === 0) {
+    return indexed;
+  }
+  return indexed.sort((left, right) => {
+    const leftRank = preferredReadTools.indexOf(SEARCH_TO_READ_TOOL[left.search.tool] ?? "local_file_read");
+    const rightRank = preferredReadTools.indexOf(SEARCH_TO_READ_TOOL[right.search.tool] ?? "local_file_read");
+    const normalizedLeftRank = leftRank < 0 ? Number.MAX_SAFE_INTEGER : leftRank;
+    const normalizedRightRank = rightRank < 0 ? Number.MAX_SAFE_INTEGER : rightRank;
+    return normalizedLeftRank - normalizedRightRank || left.searchIndex - right.searchIndex;
+  });
 }
 
 async function runPlanToolCall(

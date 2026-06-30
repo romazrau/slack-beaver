@@ -940,7 +940,8 @@ async function tryRunTypedAgentWorkflow(input: {
       plan: supplementalReadPlan,
       toolOutputs,
       maxSupplementalReads: REVIEWER_SUPPLEMENTAL_READ_MAX,
-      searchCallIdPrefix: supplementalSearchCallIdPrefix
+      searchCallIdPrefix: supplementalSearchCallIdPrefix,
+      preferredReadTools: preferredSupplementalReadTools(review.message)
     });
     const supplementalOutputs: AgentToolCallResult[] = [];
     for (const toolCall of supplementalToolCalls) {
@@ -1045,7 +1046,7 @@ async function tryRunTypedAgentWorkflow(input: {
     });
     return logTypedWorkflowReply(
       input,
-      "I found some context, but the configured context was not enough to produce a grounded answer.",
+      buildNeedsMoreContextFallbackAnswer([...toolOutputs, ...supplementalOutputs], input.effectiveQuestion),
       toolOutputs.length + supplementalOutputs.length
     );
   }
@@ -1181,6 +1182,44 @@ function buildZeroResultFallbackAnswer(toolOutputs: AgentToolCallResult[]): stri
   return `I searched the configured sources but found no matching local or Workspace results. Sources searched: ${searched.join(", ")}.`;
 }
 
+function buildNeedsMoreContextFallbackAnswer(toolOutputs: AgentToolCallResult[], question: string): string {
+  const found = summarizeSearchedConfiguredSources(toolOutputs).filter((summary) => !summary.endsWith("(0)"));
+  const reads = summarizeReadConfiguredSources(toolOutputs);
+  const sourceParts = [...found, ...reads];
+  if (sourceParts.length === 0) {
+    return buildZeroResultFallbackAnswer(toolOutputs);
+  }
+  if (containsCjkText(question)) {
+    return [
+      "我先停在這裡，因為已找到部分 configured context，但還不足以確認一個 grounded final answer。",
+      `已找到：${sourceParts.join("、")}。`,
+      "停止原因：reviewer 補讀後仍判定證據不足，繼續整理會有誤認文章或憑空補內容的風險。",
+      "下一步：你可以提供更精確的標題、來源、連結，或指定要我優先讀哪個 Google Drive / Gmail / 本機候選結果。"
+    ].join("\n");
+  }
+  return [
+    "I stopped because I found partial configured context, but not enough to verify a grounded final answer.",
+    `Context found: ${sourceParts.join(", ")}.`,
+    "Stop reason: the reviewer still found the evidence insufficient after bounded follow-up reads, so continuing would risk misidentifying the article.",
+    "Next step: provide a more specific title, source, link, or tell me which Google Drive / Gmail / local candidate to read first."
+  ].join("\n");
+}
+
+function preferredSupplementalReadTools(message: string | undefined): Array<"local_file_read" | "gmail_read_message" | "google_doc_read" | "google_drive_file_read"> {
+  const normalized = message?.toLowerCase() ?? "";
+  const preferences: Array<"local_file_read" | "gmail_read_message" | "google_drive_file_read"> = [];
+  if (/google\s*drive|drive|docs?|pdf|文件|雲端|云端/.test(normalized)) {
+    preferences.push("google_drive_file_read");
+  }
+  if (/gmail|email|mail|郵件|邮件|信件/.test(normalized)) {
+    preferences.push("gmail_read_message");
+  }
+  if (/local|本機|本地|file|檔案|档案/.test(normalized)) {
+    preferences.push("local_file_read");
+  }
+  return preferences;
+}
+
 function summarizeSearchedConfiguredSources(toolOutputs: AgentToolCallResult[]): string[] {
   const labels: Record<string, string> = {
     local_search: "local files",
@@ -1198,6 +1237,22 @@ function summarizeSearchedConfiguredSources(toolOutputs: AgentToolCallResult[]):
     })
     .filter((value): value is string => Boolean(value));
 }
+
+function summarizeReadConfiguredSources(toolOutputs: AgentToolCallResult[]): string[] {
+  const labels: Record<string, string> = {
+    local_file_read: "local file read",
+    google_drive_file_read: "Google Drive file read",
+    google_doc_read: "Google Drive file read",
+    gmail_read_message: "Gmail message read"
+  };
+  return Object.entries(labels)
+    .map(([toolName, label]) => {
+      const count = toolOutputs.filter((output) => output.name === toolName && output.resultCount > 0).length;
+      return count > 0 ? `${label} (${count})` : undefined;
+    })
+    .filter((value): value is string => Boolean(value));
+}
+
 
 async function logTypedWorkflowReply(
   input: {

@@ -181,7 +181,7 @@ function parseSearches(value: unknown): { ok: true; searches: ParsedSearches } |
     return { ok: false, reason: "searches must be an array" };
   }
 
-  const searches: AgentPlanSearchStep[] = [];
+  const candidates: Array<AgentPlanSearchStep & { originalIndexes: number[] }> = [];
   const originalIndexToSearchIndex: Array<number | undefined> = [];
   for (const [originalIndex, item] of value.entries()) {
     if (!isRecord(item)) {
@@ -203,22 +203,44 @@ function parseSearches(value: unknown): { ok: true; searches: ParsedSearches } |
     }
 
     for (const queryVariant of normalizeSearchQueryVariants(query)) {
-      const existingIndex = searches.findIndex((search) => search.tool === item.tool && search.query === queryVariant);
+      const existingIndex = candidates.findIndex((search) => search.tool === item.tool && search.query === queryVariant);
       if (existingIndex >= 0) {
-        originalIndexToSearchIndex[originalIndex] ??= existingIndex;
+        candidates[existingIndex]?.originalIndexes.push(originalIndex);
         continue;
       }
-
-      if (searches.length < MAX_PLAN_SEARCHES) {
-        originalIndexToSearchIndex[originalIndex] ??= searches.length;
-        searches.push({ tool: item.tool, query: queryVariant });
-      }
-    }
-    if (originalIndexToSearchIndex[originalIndex] === undefined) {
-      originalIndexToSearchIndex[originalIndex] = undefined;
+      candidates.push({ tool: item.tool, query: queryVariant, originalIndexes: [originalIndex] });
     }
   }
+  const searches = selectDiverseSearches(candidates);
+  for (const [selectedIndex, search] of searches.entries()) {
+    const candidate = candidates.find((item) => item.tool === search.tool && item.query === search.query);
+    for (const originalIndex of candidate?.originalIndexes ?? []) {
+      originalIndexToSearchIndex[originalIndex] ??= selectedIndex;
+    }
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    originalIndexToSearchIndex[index] ??= undefined;
+  }
   return { ok: true, searches: { steps: searches, originalIndexToSearchIndex } };
+}
+
+function selectDiverseSearches(candidates: AgentPlanSearchStep[]): AgentPlanSearchStep[] {
+  const selected: AgentPlanSearchStep[] = [];
+  for (const tool of ["local_search", "gmail_search", "google_drive_search"] satisfies AgentPlanSearchStep["tool"][]) {
+    const candidate = candidates.find((search) => search.tool === tool);
+    if (candidate) {
+      selected.push({ tool: candidate.tool, query: candidate.query });
+    }
+  }
+  for (const candidate of candidates) {
+    if (selected.length >= MAX_PLAN_SEARCHES) {
+      break;
+    }
+    if (!selected.some((search) => search.tool === candidate.tool && search.query === candidate.query)) {
+      selected.push({ tool: candidate.tool, query: candidate.query });
+    }
+  }
+  return selected.slice(0, MAX_PLAN_SEARCHES);
 }
 
 function normalizeSearchQueryVariants(query: string): string[] {

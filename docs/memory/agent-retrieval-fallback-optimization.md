@@ -31,12 +31,20 @@ Implemented on 2026-06-30:
   and appends all short clarification answers.
 - `OR`-joined planner search variants are split before execution, and planner
   instructions now prohibit boolean-style joined query strings.
+- Planner search capping preserves source diversity so Google Drive is not
+  dropped when local or Gmail variants fill the search cap first.
 - Typed retrieval performs one deterministic relaxed-query retry when all
   initial configured-source searches return zero results.
 - Reviewer supplemental reads can use relaxed retry hits, so a retry result can
   be read for grounded answer drafting when the reviewer asks for more context.
+- Reviewer supplemental reads now prioritize the source requested in the
+  reviewer message, such as Google Drive/PDF candidates.
 - Zero-result fallback text now names searched configured sources and result
   counts.
+- Reviewer `needs_more_context` after supplemental reads now returns a
+  partial-context summary instead of a generic fallback.
+- Stop summaries explain why the agent stopped and what the user can provide
+  next, with Chinese guidance for Chinese retrieval requests.
 - Public web wording receives an explicit capability-boundary answer instead of
   falling through to local-context insufficient context.
 

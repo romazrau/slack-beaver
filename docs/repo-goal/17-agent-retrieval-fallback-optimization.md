@@ -165,6 +165,8 @@ Implemented behavior:
   intent.
 - Planner search validation splits `OR`-joined or pipe-joined query variants
   into independent search steps before deterministic execution.
+- Planner search capping now preserves source diversity across local files,
+  Gmail, and Google Drive instead of keeping only the first emitted variants.
 - Planner instructions now explicitly require each search query to be one short
   standalone variant and prohibit boolean-style joined query strings.
 - Typed retrieval now performs one deterministic relaxed-query retry when all
@@ -175,6 +177,15 @@ Implemented behavior:
 - If retry still produces zero results, the Slack-visible answer names the
   configured sources searched and their result counts instead of returning only
   the generic insufficient-context fallback.
+- If the reviewer still needs more context after a bounded supplemental read,
+  Slack receives a partial-context summary that names the configured evidence
+  found instead of a generic fallback.
+- Reviewer `needs_more_context` messages now influence supplemental read source
+  priority, so requests to read Google Drive/PDF candidates do not spend the
+  bounded read budget on earlier local matches first.
+- Stop summaries now explain why the agent stopped, what configured context was
+  found, and what the user can provide next. Chinese retrieval requests receive
+  this guidance in Chinese.
 - Public web wording such as `google 上` is handled as an explicit current
   capability boundary: the agent explains that public web/Google search is not
   enabled and offers configured local/Workspace sources instead.
