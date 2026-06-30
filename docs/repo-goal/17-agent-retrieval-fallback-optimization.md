@@ -102,38 +102,38 @@ Live Slack UAT:
 - Confirm zero-result answers name the configured sources instead of returning
   only the generic fallback.
 
-## Second Goal: Capability Boundary Expansion
+## Second Goal: Capability Boundary Decision
 
-Decide how Slack Beaver should handle requests that ask for public web results,
-for example `google 上?` or `找任一篇公開文章`.
+Decision: public web search is not enabled for Slack Beaver Local Agent.
+Requests that ask for public web results, for example `google 上?` or
+`找任一篇公開文章`, should receive an explicit boundary answer and an option to
+search configured local/Workspace sources instead.
 
 ### Scope
 
-- Decide whether public web search belongs in the Local Agent.
-- If public web search is in scope, add a read-only web search tool with clear
-  provenance and citation requirements.
-- If public web search is out of scope, make the limitation explicit in prompts,
-  docs, Slack replies, and App Home guidance.
-- Keep local files, Gmail, Google Drive, and public web evidence separate in
-  traces and user-facing citations.
+- Do not add a public web search tool.
+- Make the limitation explicit in prompts, docs, Slack replies, and App Home
+  guidance.
+- Keep evidence limited to configured local files, Gmail, and Google Drive.
+- Avoid classifying ordinary topics such as `網頁設計` as public web search
+  requests unless the user asks for public web, Google web, or public articles.
 
 ### Acceptance Criteria
 
 - A request for public web results no longer falls through to a local-context
   insufficient answer without explanation.
-- If web search is enabled, public web results are cited separately from local
-  and Google Workspace sources.
-- If web search is not enabled, the agent asks whether to search configured
-  local/Workspace sources instead.
-- The README and setup docs describe the selected boundary and any required
-  configuration.
+- The agent asks whether to search configured local/Workspace sources instead.
+- Ordinary local/Workspace retrieval wording that happens to include a web-topic
+  term is still routed through the normal configured-source path.
+- The README and App Home describe the selected boundary.
 
 ### Validation
 
-Automated tests should cover the selected behavior:
+Automated tests cover the selected behavior:
 
 - Web-search-disabled behavior for public-web wording.
-- Web-search-enabled search/read/citation behavior, if implemented.
+- Regression coverage that ordinary web-topic wording still reaches the planner
+  instead of the public-web boundary.
 - Regression coverage that local-context answers still require local or
   Workspace evidence.
 
@@ -186,5 +186,23 @@ npm test -- tests/agentPlan.test.ts tests/agentCommands.test.ts
 npm run typecheck
 ```
 
-Second Goal remains open: decide whether public web search should be added or
-kept explicitly out of scope.
+Second Goal implemented on 2026-06-30.
+
+Selected boundary:
+
+- Public web/Google web search remains out of scope for Slack Beaver Local
+  Agent.
+- No public web search tool was added.
+- Public web requests receive a direct boundary reply and ask whether to search
+  configured local/Workspace sources instead.
+- App Home and README now document that AI answers can search configured local
+  files, Google Drive, and Gmail, but not public web/Google search.
+- Public web intent detection was narrowed so ordinary topic wording such as
+  `網頁設計` does not bypass the configured-source planner.
+
+Additional validation:
+
+```sh
+npm test -- tests/agentCommands.test.ts tests/appHomeView.test.ts
+npm run typecheck
+```

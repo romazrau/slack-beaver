@@ -1907,6 +1907,7 @@ function buildAgentInstructions(): string {
     "Do not reveal, request, or infer secrets.",
     "Do not execute shell commands.",
     "Do not modify files.",
+    "Public web and Google web search are not enabled. If the user asks for public web results, state the boundary and ask whether to search configured local files, Google Drive, and Gmail instead.",
     "Answer from retrieved tool context when local files or Google Workspace content is needed.",
     "Before searching, classify the request. Ask one focused clarifying question when the user asks for a subjective example, mood-based passage, or underspecified selection.",
     "For clear retrieval requests, derive multiple useful query variants internally and search with the registered search tools.",
@@ -1995,11 +1996,11 @@ function isPublicWebSearchRequest(question: string): boolean {
   if (/google\s*drive|gmail|本機|本地|local\s+files?/.test(normalized)) {
     return false;
   }
-  return /(google\s*上|網路|網頁|公開文章|公開的文章|public\s+(?:web|article)|web\s+search|on\s+google)/i.test(question);
+  return /(google\s*上|網路上|上網找|公開(?:的)?文章|public\s+(?:web|article|internet)|web\s+search|on\s+google)/i.test(normalized);
 }
 
 function buildPublicWebSearchBoundaryAnswer(): string {
-  return "I can search configured local files, Google Drive, and Gmail, but public web/Google search is not enabled. I can look in the configured local and Workspace sources instead.";
+  return "Public web/Google search is not enabled. I can search configured local files, Google Drive, and Gmail. Do you want me to search those configured local/Workspace sources instead?";
 }
 
 function isRetrievalClarificationQuestion(value: string): boolean {

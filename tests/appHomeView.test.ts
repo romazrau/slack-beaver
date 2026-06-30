@@ -44,6 +44,8 @@ describe("buildAppHomeView", () => {
     expect(serialized).toContain("Not seen yet");
     expect(serialized).toContain("find <query>");
     expect(serialized).toContain("Allowed folders");
+    expect(serialized).toContain("Capability boundary");
+    expect(serialized).toContain("Public web/Google search is not enabled");
     expect(serialized).toContain("Enable AI answers");
     expect(serialized).toContain("npm run agent:secrets:set-openai");
     expect(serialized).not.toContain("xoxb-secret");

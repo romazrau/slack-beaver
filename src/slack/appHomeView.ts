@@ -77,6 +77,13 @@ export function buildAppHomeView(config: AppConfig, state: AppHomeState = {}): V
         text: "*Chat command*\nOpen the Messages tab and type `find <query>` or `ask <question>`. Type `reset memory` to see local reset instructions."
       }
     },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "*Capability boundary*\nAI answers can search configured local files, Google Drive, and Gmail. Public web/Google search is not enabled."
+      }
+    },
     ...setupBlocks,
     ...buildAgentTokenBlocks(state.openAiTokenConfigured ?? false),
     {

@@ -1907,8 +1907,55 @@ describe("runAgentTextCommand", () => {
       }
     });
 
-    expect(response).toContain("public web/Google search is not enabled");
-    expect(response).toContain("configured local files, Google Drive, and Gmail");
+    expect(response).toContain("Public web/Google search is not enabled");
+    expect(response).toContain("Do you want me to search those configured local/Workspace sources instead?");
+  });
+
+  it("does not treat ordinary web-topic wording as a public web search request", async () => {
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    let plannerCalled = false;
+    const response = await runAgentTextCommand({
+      text: "找網頁設計相關文件",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            plannerCalled = true;
+            return {
+              responseId: "plan_1",
+              finalAnswer: JSON.stringify({
+                intent: "answer_without_tools",
+                requiresClarification: false,
+                clarifyingQuestion: null,
+                sources: [],
+                searches: [],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+
+          return {
+            responseId: "answer_1",
+            finalAnswer: "我會搜尋 configured sources 裡的網頁設計相關文件。",
+            toolCalls: []
+          };
+        }
+      }
+    });
+
+    expect(plannerCalled).toBe(true);
+    expect(response).toContain("configured sources");
   });
 
   it("writes trace logs with concrete tool-call inputs for debugging", async () => {
