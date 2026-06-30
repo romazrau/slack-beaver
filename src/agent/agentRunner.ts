@@ -16,6 +16,11 @@ import { buildSupplementalReadToolCalls, executeAgentPlan } from "./agentPlanExe
 import { parseAgentPlan, type AgentPlan } from "./agentPlan.js";
 import { buildEvidenceLedger, summarizeEvidenceLedger, type EvidenceLedger } from "./evidenceLedger.js";
 import {
+  buildAgentWorkflowState,
+  buildRetrievalWorkflowState,
+  type AgentWorkflowState
+} from "./agentWorkflowState.js";
+import {
   MAX_EXPANDED_AGENT_TOOL_TURNS,
   NORMAL_RETRIEVAL_BUDGET,
   expandedSingleDocumentBudget,
@@ -784,6 +789,12 @@ async function tryRunTypedAgentWorkflow(input: {
   turnId: string;
   conversationId: string;
 }): Promise<{ answer: string; toolCallCount: number } | undefined> {
+  await writeWorkflowStateTransition(input, buildAgentWorkflowState({
+    workflowId: input.traceId,
+    taskKind: "retrieve_answer",
+    status: "planning",
+    userGoal: input.effectiveQuestion
+  }));
   await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "planner", "planner_input", {
     direction: "input",
     kind: "model_request",
@@ -804,6 +815,12 @@ async function tryRunTypedAgentWorkflow(input: {
       conversationContext: input.conversationContext
     });
   } catch (error) {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "failed",
+      userGoal: input.effectiveQuestion,
+      stopReason: `Typed planner failed before producing a plan; falling back to the legacy agent loop: ${error instanceof Error ? error.message : "unknown error"}.`
+    }));
     await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "planner", "error", {
       direction: "error",
       kind: "model_error",
@@ -813,6 +830,12 @@ async function tryRunTypedAgentWorkflow(input: {
   }
   const parsedPlan = parseAgentPlan(plannerResponse.finalAnswer);
   if (!parsedPlan.ok) {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "failed",
+      userGoal: input.effectiveQuestion,
+      stopReason: `Typed planner output was invalid; falling back to the legacy agent loop: ${parsedPlan.reason}.`
+    }));
     await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "planner", "planner_output", {
       direction: "output",
       kind: "model_response",
@@ -834,28 +857,58 @@ async function tryRunTypedAgentWorkflow(input: {
   });
   await traceAgentEvent(input, input.traceId, "retrieval_budget_resolved", summarizeRetrievalBudget(retrievalBudget));
 
+  let latestToolOutputs: AgentToolCallResult[] = [];
+  try {
   if (plan.requiresClarification || plan.intent === "ask_user") {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "needs_user_choice",
+      userGoal: input.effectiveQuestion,
+      stopReason: "The planner needs a user choice before grounded retrieval can continue.",
+      nextUserActions: [plan.clarifyingQuestion ?? "Clarify what kind of result would be most useful."]
+    }));
     return logTypedWorkflowReply(input, plan.clarifyingQuestion ?? "What kind of result would be most useful here?", 0);
   }
 
   if (plan.intent === "insufficient_context") {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "stopped_with_summary",
+      userGoal: input.effectiveQuestion,
+      stopReason: "The planner determined configured context was insufficient before tool execution.",
+      nextUserActions: ["Provide a more specific title, source, link, or candidate location."]
+    }));
     return logTypedWorkflowReply(input, "I could not produce a grounded answer from the configured local context.", 0);
   }
 
   if (plan.intent === "answer_without_tools") {
     const answerWithoutTools = await runAnswerWithoutTools(input);
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "completed",
+      userGoal: input.effectiveQuestion,
+      constraints: plan.sources,
+      stopReason: "The planner determined this request could be answered without configured-source tool execution."
+    }));
     return logTypedWorkflowReply(input, answerWithoutTools.answer, answerWithoutTools.toolCallCount);
   }
 
   const toolContext = buildToolExecutionContext(input, retrievalBudget);
   let supplementalReadPlan = plan;
   let supplementalSearchCallIdPrefix: string | undefined;
+  await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+    workflowId: input.traceId,
+    status: plan.searches.length > 0 ? "searching" : "reading_context",
+    userGoal: input.effectiveQuestion,
+    constraints: plan.sources
+  }));
   let toolOutputs = await executeTypedAgentPlanWithLogs({
     input,
     plan,
     toolContext,
     retrievalBudget
   });
+  latestToolOutputs = toolOutputs;
   if (toolOutputs.length > 0 && !toolOutputs.some((output) => output.resultCount > 0)) {
     const retryPlan = buildZeroResultRetryPlan(plan, input.effectiveQuestion);
     if (retryPlan.searches.length > 0) {
@@ -878,9 +931,19 @@ async function tryRunTypedAgentWorkflow(input: {
         supplementalSearchCallIdPrefix = ZERO_RESULT_RETRY_TOOL_CALL_ID_PREFIX;
       }
       toolOutputs = [...toolOutputs, ...retryOutputs];
+      latestToolOutputs = toolOutputs;
     }
   }
   const evidenceLedger = buildEvidenceLedger(toolOutputs);
+  if (toolOutputs.some((output) => output.resultCount > 0)) {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "candidates_found",
+      userGoal: input.effectiveQuestion,
+      toolOutputs,
+      constraints: plan.sources
+    }));
+  }
   await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "evidence_ledger_updated", {
     direction: "internal",
     kind: "evidence",
@@ -889,6 +952,15 @@ async function tryRunTypedAgentWorkflow(input: {
   });
 
   if (toolOutputs.length === 0 || !toolOutputs.some((output) => output.resultCount > 0)) {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "stopped_with_summary",
+      userGoal: input.effectiveQuestion,
+      toolOutputs,
+      constraints: plan.sources,
+      stopReason: "No matching evidence was found in the configured sources after the bounded retrieval pass.",
+      nextUserActions: ["Provide a more specific title, source, link, or candidate location."]
+    }));
     return logTypedWorkflowReply(
       input,
       buildZeroResultFallbackAnswer(toolOutputs),
@@ -902,6 +974,13 @@ async function tryRunTypedAgentWorkflow(input: {
     evidenceLedger,
     toolOutputs
   });
+  await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+    workflowId: input.traceId,
+    status: "reviewing",
+    userGoal: input.effectiveQuestion,
+    toolOutputs,
+    constraints: plan.sources
+  }));
   await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "chat", "draft_answer", {
     direction: "output",
     kind: "model_response",
@@ -926,9 +1005,25 @@ async function tryRunTypedAgentWorkflow(input: {
   });
 
   if (review.decision === "accept") {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "completed",
+      userGoal: input.effectiveQuestion,
+      toolOutputs,
+      constraints: plan.sources
+    }));
     return logTypedWorkflowReply(input, draft, toolOutputs.length);
   }
   if (review.decision === "ask_user") {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "needs_user_choice",
+      userGoal: input.effectiveQuestion,
+      toolOutputs,
+      constraints: plan.sources,
+      stopReason: "The reviewer needs the user to clarify the target before answering.",
+      nextUserActions: [review.message ?? "Clarify what kind of result would be most useful."]
+    }));
     return logTypedWorkflowReply(
       input,
       review.message ?? "What kind of result would be most useful here?",
@@ -984,6 +1079,7 @@ async function tryRunTypedAgentWorkflow(input: {
 
     if (supplementalOutputs.length > 0) {
       const expandedToolOutputs = [...toolOutputs, ...supplementalOutputs];
+      latestToolOutputs = expandedToolOutputs;
       const expandedEvidenceLedger = buildEvidenceLedger(expandedToolOutputs);
       await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "evidence_ledger_updated", {
         direction: "internal",
@@ -1022,9 +1118,25 @@ async function tryRunTypedAgentWorkflow(input: {
       });
 
       if (expandedReview.decision === "accept") {
+        await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+          workflowId: input.traceId,
+          status: "completed",
+          userGoal: input.effectiveQuestion,
+          toolOutputs: expandedToolOutputs,
+          constraints: plan.sources
+        }));
         return logTypedWorkflowReply(input, expandedDraft, expandedToolOutputs.length);
       }
       if (expandedReview.decision === "ask_user") {
+        await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+          workflowId: input.traceId,
+          status: "needs_user_choice",
+          userGoal: input.effectiveQuestion,
+          toolOutputs: expandedToolOutputs,
+          constraints: plan.sources,
+          stopReason: "The reviewer needs the user to clarify the target after supplemental reads.",
+          nextUserActions: [expandedReview.message ?? "Clarify what kind of result would be most useful."]
+        }));
         return logTypedWorkflowReply(
           input,
           expandedReview.message ?? "What kind of result would be most useful here?",
@@ -1032,6 +1144,15 @@ async function tryRunTypedAgentWorkflow(input: {
         );
       }
       if (expandedReview.decision === "reject_insufficient_context") {
+        await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+          workflowId: input.traceId,
+          status: "stopped_with_summary",
+          userGoal: input.effectiveQuestion,
+          toolOutputs: expandedToolOutputs,
+          constraints: plan.sources,
+          stopReason: "The reviewer rejected the draft after supplemental reads because evidence was insufficient.",
+          nextUserActions: ["Provide a more specific title, source, link, or candidate location."]
+        }));
         return logTypedWorkflowReply(
           input,
           expandedReview.message ?? "I could not produce a grounded answer from the configured local context.",
@@ -1044,17 +1165,79 @@ async function tryRunTypedAgentWorkflow(input: {
       reason: supplementalOutputs.length > 0 ? "typed_reviewer_needs_more_context_after_supplemental_reads" : "typed_reviewer_needs_more_context_not_executed",
       toolCallCount: toolOutputs.length + supplementalOutputs.length
     });
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "stopped_with_summary",
+      userGoal: input.effectiveQuestion,
+      toolOutputs: [...toolOutputs, ...supplementalOutputs],
+      constraints: plan.sources,
+      stopReason: supplementalOutputs.length > 0
+        ? "The reviewer still needed more context after bounded supplemental reads."
+        : "The reviewer requested more context, but no bounded supplemental read could be executed.",
+      nextUserActions: ["Provide a more specific title, source, link, or candidate location."]
+    }));
     return logTypedWorkflowReply(
       input,
       buildNeedsMoreContextFallbackAnswer([...toolOutputs, ...supplementalOutputs], input.effectiveQuestion),
       toolOutputs.length + supplementalOutputs.length
     );
   }
+  await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+    workflowId: input.traceId,
+    status: "stopped_with_summary",
+    userGoal: input.effectiveQuestion,
+    toolOutputs,
+    constraints: plan.sources,
+    stopReason: "The reviewer rejected the draft because configured evidence was insufficient.",
+    nextUserActions: ["Provide a more specific title, source, link, or candidate location."]
+  }));
   return logTypedWorkflowReply(
     input,
     review.message ?? "I could not produce a grounded answer from the configured local context.",
     toolOutputs.length
   );
+  } catch (error) {
+    await writeWorkflowStateTransition(input, buildRetrievalWorkflowState({
+      workflowId: input.traceId,
+      status: "failed",
+      userGoal: input.effectiveQuestion,
+      toolOutputs: latestToolOutputs,
+      constraints: plan.sources,
+      stopReason: `Typed retrieval workflow failed after planning: ${error instanceof Error ? error.message : "unknown error"}.`
+    }));
+    throw error;
+  }
+}
+
+async function writeWorkflowStateTransition(
+  input: {
+    source: AgentCommandSource;
+    config: AppConfig;
+    purpose: "question" | "conversation";
+    traceId: string;
+    turnId: string;
+    conversationId: string;
+    observability?: AgentRunObservability;
+  },
+  state: AgentWorkflowState
+): Promise<void> {
+  await traceAgentEvent(input, input.traceId, "workflow_state_transition", {
+    taskKind: state.taskKind,
+    status: state.status,
+    stopReason: state.stopReason,
+    nextUserActions: state.nextUserActions
+  });
+  await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "system", "workflow_state_transition", {
+    direction: "internal",
+    kind: "workflow_state",
+    summary: buildWorkflowStateSummary(state),
+    payloadRedacted: payloadForMode(input.config, state)
+  });
+}
+
+function buildWorkflowStateSummary(state: Pick<AgentWorkflowState, "taskKind" | "status" | "stopReason">): string {
+  const suffix = state.stopReason ? `: ${state.stopReason}` : ".";
+  return `Workflow ${state.taskKind} entered ${state.status}${suffix}`;
 }
 
 async function executeTypedAgentPlanWithLogs(input: {

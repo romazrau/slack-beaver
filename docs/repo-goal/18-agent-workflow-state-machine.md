@@ -220,3 +220,39 @@ Future implementation should add automated coverage for:
 - `stopped_with_summary` when reviewer grounding still fails;
 - `awaiting_confirmation` before file writing or editing;
 - event traces containing `stopReason` and `nextUserActions`.
+
+## Implementation Result
+
+First implementation slice completed on 2026-06-30.
+
+Implemented behavior:
+
+- Added a shared typed workflow state module with reusable task kinds, statuses,
+  and `AgentWorkflowState` summary data.
+- Added retrieval workflow state builders that summarize configured sources
+  searched, candidate sources, selected candidate IDs, evidence summary, stop
+  reason, and next user actions from bounded tool outputs.
+- Added a future mutation helper that represents `write_file` and `edit_file`
+  tasks as `awaiting_confirmation` with a pending action before any filesystem
+  mutation.
+- Typed retrieval now writes `workflow_state_transition` entries to both agent
+  trace logs and structured agent event logs.
+- The typed retrieval path now records shared workflow states for planning,
+  searching or reading, candidates found, reviewing, completed answers,
+  user-choice stops, and stopped-with-summary fallbacks.
+
+Current boundary:
+
+- The state machine is observable and typed, but it is not yet the sole runtime
+  controller for every agent branch.
+- File writing and editing are not implemented in this slice; only their shared
+  confirmation state shape is implemented.
+- Durable persistence is still deferred until a concrete continuation need
+  requires it.
+
+Validated with:
+
+```sh
+npm test -- tests/agentWorkflowState.test.ts tests/agentCommands.test.ts
+npm run typecheck
+```

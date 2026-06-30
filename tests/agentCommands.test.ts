@@ -1400,12 +1400,246 @@ describe("runAgentTextCommand", () => {
     const eventContent = await fs.readFile(path.join(eventDir, eventFiles[0] ?? ""), "utf8");
     expect(eventContent).toContain("\"event\":\"slack_message_received\"");
     expect(eventContent).toContain("\"event\":\"planner_output\"");
+    expect(eventContent).toContain("\"event\":\"workflow_state_transition\"");
+    expect(eventContent).toContain("\"kind\":\"workflow_state\"");
+    expect(eventContent).toContain("\"status\":\"completed\"");
     expect(eventContent).toContain("\"event\":\"tool_call_start\"");
     expect(eventContent).toContain("\"event\":\"evidence_ledger_updated\"");
     expect(eventContent).toContain("\"event\":\"reviewer_decision\"");
     expect(eventContent).toContain("\"event\":\"slack_reply_sent\"");
     expect(eventContent).toContain("\"conversationId\":\"slack:D123:1710000000.000100\"");
     expect(eventContent).toContain("\"channelId\":\"D123\"");
+  });
+
+  it("records a completed workflow state for typed answers without tools", async () => {
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.agentEventLog = {
+      mode: "trace",
+      retentionDays: 14,
+      fullDebugRetentionDays: 3
+    };
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_without_tools",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: [],
+              searches: [],
+              reads: [],
+              readPolicy: { maxReads: 0 }
+            }),
+            toolCalls: []
+          };
+        }
+
+        return {
+          responseId: "answer_1",
+          finalAnswer: "This can be answered without tools.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask Can you answer this without configured-source tools?",
+      slackUserId: "U123",
+      channelId: "D123",
+      threadTs: "1710000000.000200",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("without tools");
+
+    const eventDir = path.join(path.dirname(config.auditLogPath), "agent-events");
+    const eventFiles = await fs.readdir(eventDir);
+    const eventContent = await fs.readFile(path.join(eventDir, eventFiles[0] ?? ""), "utf8");
+    expect(eventContent).toContain("\"event\":\"workflow_state_transition\"");
+    expect(eventContent).toContain("\"status\":\"planning\"");
+    expect(eventContent).toContain("\"status\":\"completed\"");
+    expect(eventContent).toContain("could be answered without configured-source tool execution");
+  });
+
+  it("records a failed workflow state before falling back when the typed planner throws", async () => {
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.agentEventLog = {
+      mode: "trace",
+      retentionDays: 14,
+      fullDebugRetentionDays: 3
+    };
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const purposes: string[] = [];
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        purposes.push(input.purpose);
+        if (input.purpose === "planner") {
+          throw new Error("planner unavailable");
+        }
+
+        return {
+          responseId: "legacy_1",
+          finalAnswer: "Legacy loop handled the request.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask Fall back after planner failure",
+      slackUserId: "U123",
+      channelId: "D123",
+      threadTs: "1710000000.000300",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("Legacy loop handled");
+    expect(purposes).toEqual(["planner", "question"]);
+
+    const eventDir = path.join(path.dirname(config.auditLogPath), "agent-events");
+    const eventFiles = await fs.readdir(eventDir);
+    const eventContent = await fs.readFile(path.join(eventDir, eventFiles[0] ?? ""), "utf8");
+    expect(eventContent).toContain("\"event\":\"workflow_state_transition\"");
+    expect(eventContent).toContain("\"status\":\"planning\"");
+    expect(eventContent).toContain("\"status\":\"failed\"");
+    expect(eventContent).toContain("Typed planner failed before producing a plan");
+    expect(eventContent).toContain("falling back to the legacy agent loop");
+  });
+
+  it("records a failed workflow state before falling back when the typed planner output is invalid", async () => {
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.agentEventLog = {
+      mode: "trace",
+      retentionDays: 14,
+      fullDebugRetentionDays: 3
+    };
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const purposes: string[] = [];
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        purposes.push(input.purpose);
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: "not json",
+            toolCalls: []
+          };
+        }
+
+        return {
+          responseId: "legacy_1",
+          finalAnswer: "Legacy loop handled the invalid plan.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask Fall back after invalid planner output",
+      slackUserId: "U123",
+      channelId: "D123",
+      threadTs: "1710000000.000400",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("invalid plan");
+    expect(purposes).toEqual(["planner", "question"]);
+
+    const eventDir = path.join(path.dirname(config.auditLogPath), "agent-events");
+    const eventFiles = await fs.readdir(eventDir);
+    const eventContent = await fs.readFile(path.join(eventDir, eventFiles[0] ?? ""), "utf8");
+    expect(eventContent).toContain("\"event\":\"workflow_state_transition\"");
+    expect(eventContent).toContain("\"status\":\"planning\"");
+    expect(eventContent).toContain("\"status\":\"failed\"");
+    expect(eventContent).toContain("Typed planner output was invalid");
+    expect(eventContent).toContain("falling back to the legacy agent loop");
+  });
+
+  it("records a failed workflow state when typed retrieval fails after planning", async () => {
+    await fs.writeFile(path.join(tempDir, "post-plan-failure.md"), "Post-plan failure retrieval evidence.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.agentEventLog = {
+      mode: "trace",
+      retentionDays: 14,
+      fullDebugRetentionDays: 3
+    };
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const purposes: string[] = [];
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        purposes.push(input.purpose);
+        if (input.purpose === "planner") {
+          return {
+            responseId: "plan_1",
+            finalAnswer: JSON.stringify({
+              intent: "answer_from_sources",
+              requiresClarification: false,
+              clarifyingQuestion: null,
+              sources: ["local_files"],
+              searches: [{ tool: "local_search", query: "Post-plan failure" }],
+              reads: [{ tool: "local_file_read", fromSearchIndex: 0 }],
+              readPolicy: { maxReads: 1 }
+            }),
+            toolCalls: []
+          };
+        }
+
+        throw new Error("draft model unavailable after retrieval");
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "ask Fail after the typed planner succeeds",
+      slackUserId: "U123",
+      channelId: "D123",
+      threadTs: "1710000000.000500",
+      source: "app_home_message",
+      config,
+      modelClient
+    });
+
+    expect(response).toContain("Local agent failed");
+    expect(response).toContain("draft model unavailable after retrieval");
+    expect(purposes).toEqual(["planner", "question"]);
+
+    const eventDir = path.join(path.dirname(config.auditLogPath), "agent-events");
+    const eventFiles = await fs.readdir(eventDir);
+    const eventContent = await fs.readFile(path.join(eventDir, eventFiles[0] ?? ""), "utf8");
+    expect(eventContent).toContain("\"event\":\"workflow_state_transition\"");
+    expect(eventContent).toContain("\"status\":\"searching\"");
+    expect(eventContent).toContain("\"status\":\"candidates_found\"");
+    expect(eventContent).toContain("\"status\":\"failed\"");
+    expect(eventContent).toContain("Typed retrieval workflow failed after planning");
+    expect(eventContent).toContain("draft model unavailable after retrieval");
   });
 
   it("asks one clarification for vague subjective short-passage requests before searching", async () => {

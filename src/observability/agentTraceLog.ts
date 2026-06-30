@@ -14,6 +14,7 @@ export type AgentTraceEvent = {
     | "tool_call_result"
     | "tool_call_error"
     | "reviewer_decision"
+    | "workflow_state_transition"
     | "fallback_answer"
     | "final_answer";
   source: string;

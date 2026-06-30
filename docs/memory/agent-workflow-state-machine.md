@@ -53,6 +53,25 @@ executor, evidence, reviewer, retry, and stop-summary behavior.
 Future file writing and editing should enter `ready_to_act` and
 `awaiting_confirmation` before any filesystem mutation.
 
+## Implementation Result
+
+Implemented on 2026-06-30:
+
+- Added shared typed workflow state definitions for retrieval, future
+  write/edit actions, research organization, and remote task flows.
+- Added retrieval state builders that summarize searched configured sources,
+  candidates, selected read targets, evidence, stop reasons, and next user
+  actions.
+- Added a pending mutation state builder for future `write_file` and
+  `edit_file` tasks so those flows can start at `awaiting_confirmation` before
+  filesystem changes.
+- Typed retrieval now emits `workflow_state_transition` trace and event-log
+  entries for planning, searching/reading, candidates found, reviewing,
+  completed answers, user-choice stops, and stopped summaries.
+
+This is the first implementation slice. The state machine is now typed and
+observable, but it is not yet the only controller for all legacy agent paths.
+
 ## Persistence Boundary
 
 Start by recording state summaries in local trace/event logs.
@@ -68,8 +87,8 @@ continuation beyond current traces.
 
 ## Next Work
 
-- Implement a typed `AgentWorkflowState` only when runtime code needs to share
-  state across retrieval, write/edit, or remote task paths.
+- Extend the typed workflow state transitions to legacy loop paths if those
+  paths remain user-visible.
 - Add tests for state transition decisions before using the state machine to
   gate mutating file actions.
 - Keep all non-success stops actionable: reason, attempted work, found context,
