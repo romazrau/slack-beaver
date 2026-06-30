@@ -1554,11 +1554,11 @@ function buildClarificationFollowUpQuestion(
     return undefined;
   }
 
-  if (!isMoodClarificationQuestion(recentAssistant.content)) {
+  if (!isRetrievalClarificationQuestion(recentAssistant.content)) {
     return undefined;
   }
 
-  if (!isSubjectiveContentSelectionRequest(recentUser.content)) {
+  if (!isRetrievalRequest(recentUser.content)) {
     return undefined;
   }
 
@@ -1567,7 +1567,7 @@ function buildClarificationFollowUpQuestion(
     question: [
       recentUser.content,
       "",
-      `User clarified the desired mood or theme: ${current}`
+      `User clarified the retrieval preference: ${current}`
     ].join("\n")
   };
 }
@@ -1810,6 +1810,27 @@ function buildClarificationForAmbiguousRetrievalRequest(question: string): strin
   }
 
   return undefined;
+}
+
+function isRetrievalClarificationQuestion(value: string): boolean {
+  return isMoodClarificationQuestion(value) || isGeneralRetrievalClarificationQuestion(value);
+}
+
+function isGeneralRetrievalClarificationQuestion(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized || !/[?？]/.test(normalized)) {
+    return false;
+  }
+
+  return /(你想找的是|還是|还是|任一篇|任何一篇|偏好|語言|语言|中文|英文|Google Drive|Gmail|本機|本机|local|which|prefer|language|clarify|article)/i.test(
+    normalized
+  );
+}
+
+function isRetrievalRequest(value: string): boolean {
+  return /(找|搜尋|搜索|查|文章|文件|檔案|档案|本地|本機|Google Drive|Gmail|read|find|search|article|document|file)/i.test(
+    value
+  );
 }
 
 function isSubjectiveContentSelectionRequest(question: string): boolean {

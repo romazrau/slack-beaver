@@ -67,6 +67,161 @@ describe("validateAgentPlan", () => {
     });
   });
 
+  it("deduplicates sources and caps excessive planner search variants", () => {
+    const result = validateAgentPlan({
+      intent: "answer_from_sources",
+      requiresClarification: false,
+      clarifyingQuestion: null,
+      sources: ["google_drive", "google_docs", "local_files", "gmail", "local_files"],
+      searches: [
+        { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+        { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+        { tool: "local_search", query: "AI transformation impact on developers article" },
+        { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
+        { tool: "google_drive_search", query: "AI transformation impact developers" },
+        { tool: "gmail_search", query: "\"AI\" \"developers\"" },
+        { tool: "gmail_search", query: "\"開發人員\" \"AI\"" }
+      ],
+      reads: [],
+      readPolicy: { maxReads: 0 }
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        sources: ["google_docs", "local_files", "gmail"],
+        searches: [
+          { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+          { tool: "local_search", query: "AI transformation impact on developers article" },
+          { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
+          { tool: "google_drive_search", query: "AI transformation impact developers" },
+          { tool: "gmail_search", query: "\"AI\" \"developers\"" }
+        ]
+      }
+    });
+  });
+
+  it("remaps read indexes when planner searches are deduplicated", () => {
+    const result = validateAgentPlan({
+      intent: "answer_from_sources",
+      requiresClarification: false,
+      clarifyingQuestion: null,
+      sources: ["local_files", "gmail"],
+      searches: [
+        { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+        { tool: "gmail_search", query: "\"AI\" \"developers\"" },
+        { tool: "gmail_search", query: "\"AI\" \"developers\"" }
+      ],
+      reads: [{ tool: "gmail_read_message", fromSearchIndex: 2 }],
+      readPolicy: { maxReads: 1 }
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        searches: [
+          { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+          { tool: "gmail_search", query: "\"AI\" \"developers\"" }
+        ],
+        reads: [{ tool: "gmail_read_message", fromSearchIndex: 1 }]
+      }
+    });
+  });
+
+  it("drops reads that reference capped search variants", () => {
+    const result = validateAgentPlan({
+      intent: "answer_from_sources",
+      requiresClarification: false,
+      clarifyingQuestion: null,
+      sources: ["local_files", "gmail", "google_drive"],
+      searches: [
+        { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+        { tool: "local_search", query: "AI transformation impact on developers article" },
+        { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
+        { tool: "google_drive_search", query: "AI transformation impact developers" },
+        { tool: "gmail_search", query: "\"AI\" \"developers\"" },
+        { tool: "gmail_search", query: "\"開發人員\" \"AI\"" }
+      ],
+      reads: [{ tool: "gmail_read_message", fromSearchIndex: 5 }],
+      readPolicy: { maxReads: 1 }
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        searches: [
+          { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+          { tool: "local_search", query: "AI transformation impact on developers article" },
+          { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
+          { tool: "google_drive_search", query: "AI transformation impact developers" },
+          { tool: "gmail_search", query: "\"AI\" \"developers\"" }
+        ],
+        reads: []
+      }
+    });
+  });
+
+  it("continues validating planner sources and searches after executable caps are reached", () => {
+    expect(
+      validateAgentPlan({
+        intent: "answer_from_sources",
+        requiresClarification: false,
+        clarifyingQuestion: null,
+        sources: ["google_drive", "local_files", "gmail", "notion"],
+        searches: [{ tool: "local_search", query: "AI 變革 開發人員 影響 文章" }],
+        reads: [],
+        readPolicy: { maxReads: 0 }
+      })
+    ).toMatchObject({
+      ok: false,
+      reason: "sources contains unsupported value"
+    });
+
+    expect(
+      validateAgentPlan({
+        intent: "answer_from_sources",
+        requiresClarification: false,
+        clarifyingQuestion: null,
+        sources: ["local_files"],
+        searches: [
+          { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+          { tool: "local_search", query: "AI transformation impact on developers article" },
+          { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
+          { tool: "google_drive_search", query: "AI transformation impact developers" },
+          { tool: "gmail_search", query: "\"AI\" \"developers\"" },
+          { tool: "gmail_search", query: "\"開發人員\" \"AI\"", maxChars: 1000 }
+        ],
+        reads: [],
+        readPolicy: { maxReads: 0 }
+      })
+    ).toMatchObject({
+      ok: false,
+      reason: "unexpected search fields: maxChars"
+    });
+
+    expect(
+      validateAgentPlan({
+        intent: "answer_from_sources",
+        requiresClarification: false,
+        clarifyingQuestion: null,
+        sources: ["local_files"],
+        searches: [
+          { tool: "local_search", query: "AI 變革 開發人員 影響 文章" },
+          { tool: "local_search", query: "AI transformation impact on developers article" },
+          { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
+          { tool: "google_drive_search", query: "AI transformation impact developers" },
+          { tool: "gmail_search", query: "\"AI\" \"developers\"" },
+          { tool: "web_search", query: "AI developers impact" }
+        ],
+        reads: [],
+        readPolicy: { maxReads: 0 }
+      })
+    ).toMatchObject({
+      ok: false,
+      reason: "unsupported search tool"
+    });
+  });
+
   it("ignores invalid planner budget hints without expanding the plan", () => {
     expect(
       validateAgentPlan({

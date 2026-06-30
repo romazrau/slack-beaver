@@ -71,6 +71,20 @@ The guard now covers the observed Chinese flow:
 - The runner combines that answer with the prior passage request before calling
   the model, rather than treating `安靜` as a standalone search query.
 
+The clarification follow-up handling now also covers general retrieval planner
+questions. When the planner asks which source, language, or article preference
+to use and the user replies with a short answer such as `任一篇` or `都可以`,
+the runner combines that answer with the prior retrieval request before planning
+again. This prevents short preference replies from being treated as standalone
+new requests.
+
+Planner validation remains strict for unknown fields, unknown tools, invalid
+read policies, and mismatched read tools, but now normalizes harmless model
+overproduction by deduplicating sources/searches and capping source/search
+variants before execution. This keeps common valid typed plans from falling
+back to the legacy tool loop solely because the planner returned too many query
+variants.
+
 Subjective content-selection requests also bypass raw local-search fallback. If
 the runner hits repeated-tool or max-turn fallback, it now asks for more source
 or style guidance instead of listing raw matches such as `00-poc.md`.
@@ -103,6 +117,10 @@ Automated validation now covers:
 - Ambiguous subjective request asks one clarifying question before tool use.
 - Chinese short-passage clarification follow-up is carried into the original
   request.
+- General article/source/language clarification follow-up is carried into the
+  original retrieval request.
+- Planner source/search overproduction is deduplicated and bounded instead of
+  forcing legacy-loop fallback.
 - Clear request searches, reads, and receives reviewer acceptance.
 - Reviewer can request more context without repeated identical tool loops.
 - Reviewer can reject irrelevant search matches instead of returning raw output.
@@ -112,7 +130,7 @@ Automated validation now covers:
 Validated with:
 
 ```sh
-npm test -- tests/agentCommands.test.ts
+npm test -- tests/agentPlan.test.ts tests/agentCommands.test.ts
 npm run typecheck
 ```
 

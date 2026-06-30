@@ -36,6 +36,8 @@ const SEARCH_TO_READ_TOOL: Record<AgentPlanSearchStep["tool"], AgentPlanReadStep
   gmail_search: "gmail_read_message",
   google_drive_search: "google_drive_file_read"
 };
+const MAX_PLAN_SOURCES = 3;
+const MAX_PLAN_SEARCHES = 5;
 
 export function parseAgentPlan(value: string | undefined): { ok: true; plan: AgentPlan } | { ok: false; reason: string } {
   if (!value?.trim()) {
@@ -96,9 +98,9 @@ export function validateAgentPlan(value: unknown): { ok: true; plan: AgentPlan }
     return sources;
   }
 
-  const searches = parseSearches(value.searches);
-  if (!searches.ok) {
-    return searches;
+  const searchParse = parseSearches(value.searches);
+  if (!searchParse.ok) {
+    return searchParse;
   }
 
   const readPolicy = parseReadPolicy(value.readPolicy);
@@ -106,7 +108,7 @@ export function validateAgentPlan(value: unknown): { ok: true; plan: AgentPlan }
     return readPolicy;
   }
 
-  const reads = parseReads(value.reads, searches.searches, readPolicy.readPolicy.maxReads);
+  const reads = parseReads(value.reads, searchParse.searches, readPolicy.readPolicy.maxReads);
   if (!reads.ok) {
     return reads;
   }
@@ -120,7 +122,7 @@ export function validateAgentPlan(value: unknown): { ok: true; plan: AgentPlan }
     return { ok: false, reason: "clarifyingQuestion is required for clarification plans" };
   }
 
-  if (value.intent === "answer_from_sources" && searches.searches.length === 0) {
+  if (value.intent === "answer_from_sources" && searchParse.searches.steps.length === 0) {
     return { ok: false, reason: "answer_from_sources requires at least one search" };
   }
 
@@ -131,7 +133,7 @@ export function validateAgentPlan(value: unknown): { ok: true; plan: AgentPlan }
       requiresClarification: value.requiresClarification,
       clarifyingQuestion,
       sources: sources.sources,
-      searches: searches.searches,
+      searches: searchParse.searches.steps,
       reads: reads.reads,
       readPolicy: readPolicy.readPolicy,
       budgetHint,
@@ -144,16 +146,13 @@ function parseSources(value: unknown): { ok: true; sources: AgentPlanSource[] } 
   if (!Array.isArray(value)) {
     return { ok: false, reason: "sources must be an array" };
   }
-  if (value.length > 3) {
-    return { ok: false, reason: "sources has too many items" };
-  }
   const sources: AgentPlanSource[] = [];
   for (const item of value) {
     if (item !== "local_files" && item !== "gmail" && item !== "google_docs" && item !== "google_drive") {
       return { ok: false, reason: "sources contains unsupported value" };
     }
     const normalized = normalizeSource(item);
-    if (!sources.includes(normalized)) {
+    if (!sources.includes(normalized) && sources.length < MAX_PLAN_SOURCES) {
       sources.push(normalized);
     }
   }
@@ -171,16 +170,19 @@ function parseBudgetHint(value: unknown): RetrievalBudgetMode | undefined {
   return undefined;
 }
 
-function parseSearches(value: unknown): { ok: true; searches: AgentPlanSearchStep[] } | { ok: false; reason: string } {
+type ParsedSearches = {
+  steps: AgentPlanSearchStep[];
+  originalIndexToSearchIndex: Array<number | undefined>;
+};
+
+function parseSearches(value: unknown): { ok: true; searches: ParsedSearches } | { ok: false; reason: string } {
   if (!Array.isArray(value)) {
     return { ok: false, reason: "searches must be an array" };
   }
-  if (value.length > 5) {
-    return { ok: false, reason: "searches has too many items" };
-  }
 
   const searches: AgentPlanSearchStep[] = [];
-  for (const item of value) {
+  const originalIndexToSearchIndex: Array<number | undefined> = [];
+  for (const [originalIndex, item] of value.entries()) {
     if (!isRecord(item)) {
       return { ok: false, reason: "search step must be an object" };
     }
@@ -198,9 +200,21 @@ function parseSearches(value: unknown): { ok: true; searches: AgentPlanSearchSte
     if (query.length > 500) {
       return { ok: false, reason: "search query is too long" };
     }
-    searches.push({ tool: item.tool, query });
+
+    const existingIndex = searches.findIndex((search) => search.tool === item.tool && search.query === query);
+    if (existingIndex >= 0) {
+      originalIndexToSearchIndex[originalIndex] = existingIndex;
+      continue;
+    }
+
+    if (searches.length < MAX_PLAN_SEARCHES) {
+      originalIndexToSearchIndex[originalIndex] = searches.length;
+      searches.push({ tool: item.tool, query });
+    } else {
+      originalIndexToSearchIndex[originalIndex] = undefined;
+    }
   }
-  return { ok: true, searches };
+  return { ok: true, searches: { steps: searches, originalIndexToSearchIndex } };
 }
 
 function parseReadPolicy(value: unknown): { ok: true; readPolicy: AgentReadPolicy } | { ok: false; reason: string } {
@@ -226,7 +240,7 @@ function parseReadPolicy(value: unknown): { ok: true; readPolicy: AgentReadPolic
 
 function parseReads(
   value: unknown,
-  searches: AgentPlanSearchStep[],
+  searches: ParsedSearches,
   maxReads: number
 ): { ok: true; reads: AgentPlanReadStep[] } | { ok: false; reason: string } {
   if (!Array.isArray(value)) {
@@ -256,7 +270,14 @@ function parseReads(
     if (typeof fromSearchIndex !== "number" || !Number.isInteger(fromSearchIndex)) {
       return { ok: false, reason: "fromSearchIndex must be an integer" };
     }
-    const search = searches[fromSearchIndex];
+    if (fromSearchIndex < 0 || fromSearchIndex >= searches.originalIndexToSearchIndex.length) {
+      return { ok: false, reason: "read references missing search step" };
+    }
+    const normalizedSearchIndex = searches.originalIndexToSearchIndex[fromSearchIndex];
+    if (normalizedSearchIndex === undefined) {
+      continue;
+    }
+    const search = searches.steps[normalizedSearchIndex];
     if (!search) {
       return { ok: false, reason: "read references missing search step" };
     }
@@ -264,7 +285,7 @@ function parseReads(
       return { ok: false, reason: "read tool does not match referenced search tool" };
     }
     const tool = item.tool;
-    reads.push({ tool, fromSearchIndex });
+    reads.push({ tool, fromSearchIndex: normalizedSearchIndex });
   }
   return { ok: true, reads };
 }

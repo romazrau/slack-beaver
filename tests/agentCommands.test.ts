@@ -1508,7 +1508,7 @@ describe("runAgentTextCommand", () => {
     const modelClient: AgentModelClient = {
       async createResponse(input) {
         expect(input.question).toContain("從我本地找到一個適合當作今天心情的短文");
-        expect(input.question).toContain("User clarified the desired mood or theme: 安靜");
+        expect(input.question).toContain("User clarified the retrieval preference: 安靜");
         return {
           responseId: "resp_1",
           finalAnswer: "我會找安靜風格的短文。",
@@ -1527,6 +1527,86 @@ describe("runAgentTextCommand", () => {
     });
 
     expect(secondResponse).toContain("安靜風格");
+  });
+
+  it("treats a short article preference answer as a follow-up to the prior clarification", async () => {
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const firstResponse = await runAgentTextCommand({
+      text: "我想找一篇文章，是關於AI 變革對開發人員的影響",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            return {
+              responseId: "plan_1",
+              finalAnswer: JSON.stringify({
+                intent: "ask_user",
+                requiresClarification: true,
+                clarifyingQuestion: "你想找的是本機/Google Drive/Gmail 裡已有的一篇文章，還是任一篇符合主題的文章？",
+                sources: [],
+                searches: [],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+
+          throw new Error("Clarification should not draft an answer.");
+        }
+      }
+    });
+
+    expect(firstResponse).toContain("本機/Google Drive/Gmail");
+
+    const seenPlannerQuestions: string[] = [];
+    const secondResponse = await runAgentTextCommand({
+      text: "任一篇",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            seenPlannerQuestions.push(input.question);
+            expect(input.question).toContain("我想找一篇文章，是關於AI 變革對開發人員的影響");
+            expect(input.question).toContain("User clarified the retrieval preference: 任一篇");
+            return {
+              responseId: "plan_2",
+              finalAnswer: JSON.stringify({
+                intent: "answer_without_tools",
+                requiresClarification: false,
+                clarifyingQuestion: null,
+                sources: [],
+                searches: [],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+
+          return {
+            responseId: "answer_1",
+            finalAnswer: "我會找任一篇符合主題的文章。",
+            toolCalls: []
+          };
+        }
+      }
+    });
+
+    expect(seenPlannerQuestions).toHaveLength(1);
+    expect(secondResponse).toContain("任一篇符合主題");
   });
 
   it("writes trace logs with concrete tool-call inputs for debugging", async () => {
