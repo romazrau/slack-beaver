@@ -15,6 +15,11 @@ The third-party `taylorwilsdon/google_workspace_mcp` project remains a possible 
 - Added read-only Gmail, Drive, and Docs tools behind Tool Registry validation.
 - Added `google_drive_file_read` so Drive search results can be read when they
   are native Google Docs or PDFs.
+- `google_drive_file_read` and the legacy `google_doc_read` alias now accept an
+  optional extracted-text `offset`. Truncated reads return `nextOffset`, letting
+  the agent continue a long Google Doc or Drive PDF from the next bounded text
+  segment instead of rereading from the beginning. The offset is a character
+  position in the extracted text, not a PDF page number.
 - `google_doc_read` remains available as a legacy tool name, but it now routes
   through the Drive file reader so model-selected Drive/PDF IDs are checked via
   Drive metadata before content is read. This avoids sending non-native-Docs
@@ -35,6 +40,9 @@ The third-party `taylorwilsdon/google_workspace_mcp` project remains a possible 
 - Google Workspace adapter tests cover refresh-token handling and bounded Docs output.
 - Google Workspace adapter tests cover Drive search query normalization, bounded
   Google error diagnostics, and one retry for transient request failures.
+- Google Workspace adapter tests cover continuing a Google Drive document read
+  from `nextOffset`, and agent command tests cover the model using that offset
+  in a follow-up `google_drive_file_read` call.
 - Agent command tests cover Google tool catalog exposure and Gmail search without auditing email content.
 - Agent command tests cover legacy `google_doc_read` calls being fulfilled
   through `google_drive_file_read` instead of raw Docs API reads.

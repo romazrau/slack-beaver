@@ -13,7 +13,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `doc-test-fixtures.md`: Synthetic local-search fixture corpus for poetry, literature, markets, news-style briefs, conversations, and task lists.
 - `dynamic-readable-scope-and-runtime-notices.md`: Selected design for Slack-native folder scope expansion and proactive Local Agent online/offline notices.
 - `future-hybrid-routing.md`: Future Central Server routing decision for multiple Local Agents while keeping the current POC single-active-agent.
-- `google-workspace-oauth.md`: Local Google OAuth onboarding, restart-time connection guidance, read-only Gmail/Drive/Docs Tool Registry tools, Drive metadata-aware file reads, bounded request-error diagnostics, Drive search normalization/retry behavior, and token/audit safety decisions.
+- `google-workspace-oauth.md`: Local Google OAuth onboarding, restart-time connection guidance, read-only Gmail/Drive/Docs Tool Registry tools, Drive metadata-aware file reads with offset-based continuation, bounded request-error diagnostics, Drive search normalization/retry behavior, and token/audit safety decisions.
 - `local-memory-and-ai-agent.md`: Implemented SQLite local memory, OpenAI-only provider decision, local CLI token setup, token refusal, and agent tool safety rules.
 - `local-agent-runtime-status.md`: Local Agent runtime heartbeat, Slack App Home online/stale status, fixed unavailable-agent guidance, and current Slack ingress boundary.
 - `node-runtime-and-native-sqlite.md`: Node.js 22 runtime standardization and `better-sqlite3` native ABI rebuild guidance.

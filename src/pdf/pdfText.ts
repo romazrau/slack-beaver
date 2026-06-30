@@ -6,12 +6,17 @@ const DEFAULT_MAX_PDF_TEXT_CHARS = 4000;
 export type PdfTextExtractionResult = {
   content: string;
   truncated: boolean;
+  offset: number;
+  nextOffset?: number;
 };
 
 export async function extractPdfText(
   data: Uint8Array,
-  maxChars = DEFAULT_MAX_PDF_TEXT_CHARS
+  options: number | { maxChars?: number; offset?: number } = DEFAULT_MAX_PDF_TEXT_CHARS
 ): Promise<PdfTextExtractionResult> {
+  const maxChars = typeof options === "number" ? options : options.maxChars ?? DEFAULT_MAX_PDF_TEXT_CHARS;
+  const offset = typeof options === "number" ? 0 : normalizeOffset(options.offset);
+  const readEnd = offset + Math.max(0, maxChars);
   const document = await getDocument({
     data,
     disableFontFace: true,
@@ -19,8 +24,9 @@ export async function extractPdfText(
   }).promise;
 
   const chunks: string[] = [];
-  let collectedLength = 0;
   let truncated = false;
+  let rawTextLength = 0;
+  let hasPriorText = false;
 
   try {
     for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
@@ -38,28 +44,54 @@ export async function extractPdfText(
         continue;
       }
 
-      const separator = chunks.length > 0 ? "\n\n" : "";
+      const separator = hasPriorText ? "\n\n" : "";
       const nextChunk = `${separator}${pageText}`;
-      const remaining = maxChars - collectedLength;
-      if (nextChunk.length > remaining) {
-        chunks.push(nextChunk.slice(0, Math.max(0, remaining)));
+      const chunkStart = rawTextLength;
+      const chunkEnd = rawTextLength + nextChunk.length;
+      hasPriorText = true;
+      if (chunkEnd <= offset) {
+        rawTextLength = chunkEnd;
+        continue;
+      }
+
+      if (chunkStart < readEnd) {
+        const sliceStart = Math.max(0, offset - chunkStart);
+        const sliceEnd = Math.min(nextChunk.length, readEnd - chunkStart);
+        chunks.push(nextChunk.slice(sliceStart, sliceEnd));
+      }
+
+      if (chunkEnd > readEnd) {
         truncated = true;
         break;
       }
 
-      chunks.push(nextChunk);
-      collectedLength += nextChunk.length;
+      rawTextLength = chunkEnd;
     }
   } finally {
     await document.destroy();
   }
 
+  const rawBoundedContent = chunks.join("");
+  const boundedContent = rawBoundedContent.trim();
   return {
-    content: chunks.join("").trim(),
-    truncated
+    content: truncated ? appendTruncationMarker(boundedContent) : boundedContent,
+    truncated,
+    offset,
+    nextOffset: truncated ? offset + rawBoundedContent.length : undefined
   };
 }
 
 function isPdfTextItem(item: unknown): item is TextItem {
   return typeof item === "object" && item !== null && "str" in item && typeof item.str === "string";
+}
+
+function normalizeOffset(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+  return Math.floor(value);
+}
+
+function appendTruncationMarker(value: string): string {
+  return `${value}\n[truncated]`;
 }

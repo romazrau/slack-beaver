@@ -231,6 +231,64 @@ describe("Google Workspace client", () => {
     expect(expandedDoc.truncated).toBe(false);
   });
 
+  it("continues Google Drive document reads from a text offset", async () => {
+    const config = buildConfig();
+    await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {
+      accessToken: "access-token",
+      expiresAt: Date.now() + 3600_000,
+      scopes: ["https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/documents.readonly"]
+    });
+    const docContent = "Intro section. Continuation section. Final section.";
+
+    const fetchFn: typeof fetch = async (input) => {
+      const url = input.toString();
+      if (url.includes("fields=id,name,mimeType")) {
+        return jsonResponse({
+          id: "doc_123",
+          name: "Long Planning Doc",
+          mimeType: "application/vnd.google-apps.document"
+        });
+      }
+      if (url.startsWith("https://docs.googleapis.com/v1/documents/")) {
+        return jsonResponse({
+          title: "Long Planning Doc",
+          body: {
+            content: [
+              {
+                paragraph: {
+                  elements: [{ textRun: { content: docContent } }]
+                }
+              }
+            ]
+          }
+        });
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    };
+
+    const client = await createConfiguredGoogleWorkspaceClient({ config, fetchFn });
+    const firstSegment = await client.googleDriveFileRead("doc_123", { maxTextChars: 14 });
+    const continuedSegment = await client.googleDriveFileRead("doc_123", {
+      maxTextChars: 22,
+      offset: firstSegment.nextOffset
+    });
+
+    expect(firstSegment).toMatchObject({
+      content: "Intro section.\n[truncated]",
+      truncated: true,
+      offset: 0,
+      nextOffset: 14,
+      totalTextChars: docContent.length
+    });
+    expect(continuedSegment).toMatchObject({
+      content: " Continuation section.\n[truncated]",
+      truncated: true,
+      offset: 14,
+      nextOffset: 36,
+      totalTextChars: docContent.length
+    });
+  });
+
   it("clamps oversized Google Drive file read bounds to the hard cap", async () => {
     const config = buildConfig();
     await saveGoogleOAuthToken(config.googleWorkspace.tokenPath, {

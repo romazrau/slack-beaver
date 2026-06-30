@@ -1734,6 +1734,7 @@ function buildAgentInstructions(): string {
     "Before searching, classify the request. Ask one focused clarifying question when the user asks for a subjective example, mood-based passage, or underspecified selection.",
     "For clear retrieval requests, derive multiple useful query variants internally and search with the registered search tools.",
     "Use search tools first to find candidate sources. If snippets are insufficient, read only the top one to three relevant sources with the matching read tool.",
+    "If a Google Drive read result is truncated and includes nextOffset, you may continue the same source by calling google_drive_file_read with the same documentId and that offset.",
     "When a tool result contains enough context to answer, stop calling tools and produce the final answer.",
     "Do not repeat the same tool call with the same input.",
     "If retrieved context is insufficient, say that the configured context is insufficient.",

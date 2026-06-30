@@ -840,6 +840,133 @@ describe("runAgentTextCommand", () => {
     expect(auditLine).not.toContain("private doc detail");
   });
 
+  it("allows Google Drive file reads to continue from nextOffset", async () => {
+    const config = buildConfig();
+    config.localFiles.watchedFolders = [];
+    config.localMemory.enabled = true;
+    config.googleWorkspace.enabled = true;
+    config.ai.maxToolTurns = 3;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.setProviderTokenConfigured("google", true);
+    store.close();
+    let modelCallCount = 0;
+    const driveReadOffsets: Array<number | undefined> = [];
+
+    const modelClient: AgentModelClient = {
+      async createResponse(input) {
+        if (input.purpose === "reviewer") {
+          expect(input.toolOutputs.filter((output) => output.name === "google_drive_file_read")).toHaveLength(2);
+          return reviewerAcceptResponse();
+        }
+
+        modelCallCount += 1;
+        if (modelCallCount === 1) {
+          return {
+            responseId: "resp_1",
+            toolCalls: [
+              {
+                id: "call_1",
+                name: "google_drive_search",
+                input: { query: "Long Planning Doc" }
+              }
+            ]
+          };
+        }
+
+        if (modelCallCount === 2) {
+          return {
+            responseId: "resp_2",
+            toolCalls: [
+              {
+                id: "call_2",
+                name: "google_drive_file_read",
+                input: { documentId: "doc_123" }
+              }
+            ]
+          };
+        }
+
+        if (modelCallCount === 3) {
+          expect(input.toolOutputs[0]?.output).toContain("\"nextOffset\":14");
+          return {
+            responseId: "resp_3",
+            toolCalls: [
+              {
+                id: "call_3",
+                name: "google_drive_file_read",
+                input: { documentId: "doc_123", offset: 14 }
+              }
+            ]
+          };
+        }
+
+        expect(input.toolOutputs[0]?.output).toContain("Continuation section");
+        return {
+          responseId: "resp_4",
+          finalAnswer: "The document starts with the intro and continues into the continuation section. Source: Long Planning Doc.",
+          toolCalls: []
+        };
+      }
+    };
+
+    const response = await runAgentTextCommand({
+      text: "Summarize the Long Planning Doc and continue if the first read is truncated.",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient,
+      googleWorkspaceClient: {
+        async gmailSearch() {
+          throw new Error("not used");
+        },
+        async gmailReadMessage() {
+          throw new Error("not used");
+        },
+        async googleDriveSearch() {
+          return [
+            {
+              documentId: "doc_123",
+              name: "Long Planning Doc",
+              mimeType: "application/vnd.google-apps.document"
+            }
+          ];
+        },
+        async googleDocRead() {
+          throw new Error("not used");
+        },
+        async googleDriveFileRead(_documentId, options) {
+          driveReadOffsets.push(options?.offset);
+          if (options?.offset === 14) {
+            return {
+              documentId: "doc_123",
+              title: "Long Planning Doc",
+              content: " Continuation section.",
+              mimeType: "application/vnd.google-apps.document",
+              truncated: false,
+              offset: 14,
+              totalTextChars: 36
+            };
+          }
+          return {
+            documentId: "doc_123",
+            title: "Long Planning Doc",
+            content: "Intro section.\n[truncated]",
+            mimeType: "application/vnd.google-apps.document",
+            truncated: true,
+            offset: 0,
+            nextOffset: 14,
+            totalTextChars: 36
+          };
+        }
+      }
+    });
+
+    expect(driveReadOffsets).toEqual([undefined, 14]);
+    expect(response).toContain("continuation section");
+  });
+
   it("expands retrieval budget for explicit whole-document Google Drive outlines", async () => {
     const config = buildConfig();
     config.localFiles.watchedFolders = [];

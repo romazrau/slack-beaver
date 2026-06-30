@@ -77,10 +77,14 @@ export type GoogleDoc = {
   content: string;
   mimeType?: string;
   truncated?: boolean;
+  offset?: number;
+  nextOffset?: number;
+  totalTextChars?: number;
 };
 
 export type GoogleDriveFileReadOptions = {
   maxTextChars?: number;
+  offset?: number;
 };
 
 export type GoogleWorkspaceClient = {
@@ -253,6 +257,7 @@ export function createGoogleWorkspaceClient(input: {
 
     async googleDriveFileRead(documentId, options) {
       const maxTextChars = clampDriveFileReadMaxChars(options?.maxTextChars);
+      const offset = normalizeReadOffset(options?.offset);
       const metadata = await googleFetch<GoogleDriveApiFile>(
         `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(documentId)}?fields=id,name,mimeType`,
         {
@@ -269,12 +274,19 @@ export function createGoogleWorkspaceClient(input: {
           }
         );
         const content = extractGoogleDocText(doc);
+        const bounded = sliceBoundedText(content, {
+          maxTextChars,
+          offset
+        });
         return {
           documentId,
           title: doc.title ?? metadata.name ?? "Untitled document",
-          content: truncate(content, maxTextChars),
+          content: bounded.content,
           mimeType: metadata.mimeType,
-          truncated: content.length > maxTextChars
+          truncated: bounded.truncated,
+          offset: bounded.offset,
+          nextOffset: bounded.nextOffset,
+          totalTextChars: bounded.totalTextChars
         };
       }
       if (metadata.mimeType === PDF_MIME_TYPE) {
@@ -285,13 +297,19 @@ export function createGoogleWorkspaceClient(input: {
             operation: "drive.files.get_media"
           }
         );
-        const extracted = await extractPdfText(pdfBytes, maxTextChars);
+        const extracted = await extractPdfText(pdfBytes, {
+          maxChars: maxTextChars,
+          offset
+        });
         return {
           documentId,
           title: metadata.name ?? "Untitled PDF",
           content: extracted.content,
           mimeType: metadata.mimeType,
-          truncated: extracted.truncated
+          truncated: extracted.truncated,
+          offset: extracted.offset,
+          nextOffset: extracted.nextOffset,
+          totalTextChars: extracted.truncated ? undefined : extracted.offset + extracted.content.length
         };
       }
       throw new Error(`Google Drive MIME type is not readable: ${metadata.mimeType ?? "unknown"}`);
@@ -495,6 +513,23 @@ function truncate(value: string, maxChars = MAX_TEXT_CHARS): string {
   return value.length > maxChars ? `${value.slice(0, maxChars)}\n[truncated]` : value;
 }
 
+function sliceBoundedText(
+  value: string,
+  options: { maxTextChars: number; offset: number }
+): { content: string; truncated: boolean; offset: number; nextOffset?: number; totalTextChars: number } {
+  const start = Math.min(options.offset, value.length);
+  const end = Math.min(start + options.maxTextChars, value.length);
+  const sliced = value.slice(start, end);
+  const truncated = end < value.length;
+  return {
+    content: truncated ? `${sliced}\n[truncated]` : sliced,
+    truncated,
+    offset: start,
+    nextOffset: truncated ? end : undefined,
+    totalTextChars: value.length
+  };
+}
+
 function clampDriveFileReadMaxChars(value: number | undefined): number {
   if (value === undefined) {
     return MAX_TEXT_CHARS;
@@ -503,4 +538,11 @@ function clampDriveFileReadMaxChars(value: number | undefined): number {
     return MAX_TEXT_CHARS;
   }
   return Math.min(Math.floor(value), MAX_DRIVE_FILE_READ_TEXT_CHARS);
+}
+
+function normalizeReadOffset(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+  return Math.floor(value);
 }
