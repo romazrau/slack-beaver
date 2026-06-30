@@ -1,9 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatSlackAgentReply,
   isDirectUserMessage,
   isMessageBeforeRuntimeStart,
   protectSocketModeClientFromConnectingDisconnect
 } from "../src/slack/slackApp.js";
+
+describe("formatSlackAgentReply", () => {
+  it("wraps raw command output in a Slack markdown message payload", () => {
+    const reply = formatSlackAgentReply("## Result\nUse **bold** formatting.");
+
+    expect(reply.text).toContain("## Result");
+    expect(reply.blocks).toHaveLength(1);
+    expect(reply.blocks[0].type).toBe("section");
+    expect(JSON.stringify(reply.blocks)).toContain("*Result*");
+    expect(JSON.stringify(reply.blocks)).toContain("Use *bold* formatting.");
+  });
+});
 
 describe("isDirectUserMessage", () => {
   it("accepts direct user messages", () => {

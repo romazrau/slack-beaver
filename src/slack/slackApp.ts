@@ -10,6 +10,7 @@ import {
   type RuntimeNoticeKind,
   type SlackNoticeClient
 } from "./runtimeStatus.js";
+import { buildSlackMarkdownMessage, type SlackMarkdownMessage } from "./slackMarkdown.js";
 
 export function createSlackApp(config: AppConfig): SlackBoltApp {
   if (!config.slack.botToken || !config.slack.appToken) {
@@ -39,7 +40,7 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
       config,
       logger
     });
-    await respond(response);
+    await respond(formatSlackAgentReply(response));
   });
 
   app.event("app_home_opened", async ({ event, client, logger }) => {
@@ -76,10 +77,14 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
       config,
       logger
     });
-    await say(response);
+    await say(formatSlackAgentReply(response));
   });
 
   return app;
+}
+
+export function formatSlackAgentReply(text: string): SlackMarkdownMessage {
+  return buildSlackMarkdownMessage(text);
 }
 
 type SocketModeStateMachine = {
