@@ -60,6 +60,7 @@
 - App DM handling now ignores Slack DM message events whose Slack `ts` predates the current Local Agent startup, preventing delayed replies to messages sent while the bot was offline.
 - App DM natural conversation instructions now explain those deterministic runtime commands and receive non-secret runtime status context, so the agent can say searchable paths can be added with `folders add /absolute/path/to/folder` or confirmed with `confirm folders add /absolute/path/to/folder` without silently granting folder access from natural language.
 - Local Agent startup and graceful shutdown now send best-effort online/offline Slack lifecycle notices to `LOCAL_AGENT_STATUS_CHANNEL_ID`, a subscribed Slack conversation, or a recent conversation fallback.
+- Local Agent Socket Mode startup now guards against Slack server `disconnect` frames that arrive while the SDK state machine is still `connecting`, preventing that transient SDK edge case from crashing the process.
 - The guarded OpenAI runner now stops repeated identical tool calls and answers from the last bounded tool output when possible instead of failing on the maximum tool-turn limit.
 - The guarded OpenAI runner now asks a focused clarification for vague mood-based short-passage requests before search, carries short clarification follow-ups such as `安靜` back into the original request, routes retrieval draft answers through a no-tool reviewer role, and lets the reviewer accept, request more context, ask the user, or reject insufficient context.
 - The guarded OpenAI runner now has a typed workflow path with planner JSON validation, deterministic plan execution through Tool Registry, an evidence ledger, reviewer evaluation over plan/evidence/draft, and fallback to the legacy loop when planner output is invalid or disabled.
@@ -117,6 +118,7 @@
 - Typed agent workflow and local observability validation passed focused config, plan validation, event log, and agent command tests plus typecheck under Node.js `v22.23.1`.
 - Chrome live Slack UAT for retrieval reviewer follow-up confirmed clarification and trace logging, but found remaining gaps in tool-turn budgeting, reviewer `needs_more_context` handling, and content-file prioritization; the next acceptance criteria are recorded in `docs/repo-goal/16-agent-retrieval-uat-hardening.md`.
 - Agent retrieval UAT hardening automated validation passed focused `tests/agentCommands.test.ts` coverage and typecheck under Node.js `v22.23.1`, covering final boundary reads, continuation from a saved pending tool call, confirmation classifier continue/stop/unrelated/unclear handling, five unrelated-turn cleanup, typed content-file read prioritization, ordinary `docs/` content handling, quiet passage prioritization, and reviewer `needs_more_context` containment.
+- Slack Socket Mode startup disconnect validation passed focused `tests/slackApp.test.ts` coverage and `npm run typecheck` under Node.js `v22.23.1`.
 
 ## Likely Next Work
 

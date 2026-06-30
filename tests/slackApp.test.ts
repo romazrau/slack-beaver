@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isDirectUserMessage, isMessageBeforeRuntimeStart } from "../src/slack/slackApp.js";
+import {
+  isDirectUserMessage,
+  isMessageBeforeRuntimeStart,
+  protectSocketModeClientFromConnectingDisconnect
+} from "../src/slack/slackApp.js";
 
 describe("isDirectUserMessage", () => {
   it("accepts direct user messages", () => {
@@ -83,5 +87,69 @@ describe("isMessageBeforeRuntimeStart", () => {
 
     expect(isMessageBeforeRuntimeStart({}, runtimeStartedAt)).toBe(false);
     expect(isMessageBeforeRuntimeStart({ ts: "not-a-slack-ts" }, runtimeStartedAt)).toBe(false);
+  });
+});
+
+describe("protectSocketModeClientFromConnectingDisconnect", () => {
+  it("swallows Slack server disconnect messages while the Socket Mode client is connecting", async () => {
+    const calls: unknown[] = [];
+    const warnings: string[] = [];
+    const client = {
+      stateMachine: {
+        getCurrentState: () => "connecting"
+      },
+      logger: {
+        warn: (message: string) => warnings.push(message)
+      },
+      onWebSocketMessage: async (event: { data: unknown }) => {
+        calls.push(event);
+      }
+    };
+
+    protectSocketModeClientFromConnectingDisconnect(client);
+    await client.onWebSocketMessage({
+      data: JSON.stringify({ type: "disconnect", reason: "warning" })
+    });
+
+    expect(calls).toEqual([]);
+    expect(warnings.join("\n")).toContain("server disconnect");
+  });
+
+  it("keeps normal Socket Mode messages on the SDK handler path", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      stateMachine: {
+        getCurrentState: () => "connecting"
+      },
+      onWebSocketMessage: async (event: { data: unknown }) => {
+        calls.push(event);
+      }
+    };
+
+    protectSocketModeClientFromConnectingDisconnect(client);
+    await client.onWebSocketMessage({
+      data: JSON.stringify({ type: "hello" })
+    });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it("keeps connected disconnect messages on the SDK handler path", async () => {
+    const calls: unknown[] = [];
+    const client = {
+      stateMachine: {
+        getCurrentState: () => "connected"
+      },
+      onWebSocketMessage: async (event: { data: unknown }) => {
+        calls.push(event);
+      }
+    };
+
+    protectSocketModeClientFromConnectingDisconnect(client);
+    await client.onWebSocketMessage({
+      data: Buffer.from(JSON.stringify({ type: "disconnect", reason: "refresh_requested" }))
+    });
+
+    expect(calls).toHaveLength(1);
   });
 });

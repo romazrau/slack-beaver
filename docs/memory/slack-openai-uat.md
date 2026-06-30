@@ -55,10 +55,31 @@ SQLite local-memory allowed folders.
 For pure fixture UAT, clear `.env` `WATCHED_FOLDERS` or point it only at the same
 fixture root used by local memory.
 
+## Socket Mode Startup Stability
+
+`npm run uat:first` exposed a Slack Socket Mode crash after the Local Agent
+printed the online notice. Slack sent a `disconnect` frame while the SDK state
+machine was still in `connecting`, and `@slack/socket-mode` threw
+`Unhandled event 'server explicit disconnect' in state 'connecting'`.
+
+The Local Agent now creates an explicit `SocketModeReceiver` and wraps its
+`SocketModeClient.onWebSocketMessage` before startup. The wrapper ignores only
+Slack `disconnect` frames received while the SDK reports `connecting`; normal
+messages and `disconnect` frames after the connection is established still use
+the SDK handler path.
+
+This is intentionally narrow so Slack's normal reconnect behavior remains owned
+by the SDK.
+
 ## Validation
 
 - Focused regression test covers a model that repeats identical `local_search`
   requests and verifies the runner returns a bounded fallback answer.
+- Focused Slack app tests cover the Socket Mode `connecting` + server
+  `disconnect` guard, normal `hello` handling, and connected-state disconnect
+  handling.
+- Build-output runtime import of `dist/slack/slackApp.js` passed, covering the
+  Node ESM/CommonJS interop path used by Local Agent startup.
 - Focused `tests/agentCommands.test.ts` passed.
 - `npm run typecheck` passed.
 

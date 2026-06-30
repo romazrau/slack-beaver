@@ -26,7 +26,7 @@ This directory records project decisions, implementation notes, progress, and ne
 - `remote-task-dispatch-planning.md`: Planned next hybrid POC for Center Server-owned agent tasks, Local Agent worker execution, registration, heartbeat, and claim leases.
 - `repo-initialization.md`: Initial repository documentation and ignore-rule decisions.
 - `search-read-summarize-planning.md`: Implemented local and Google search/read/summarize workflow, including local and Google Drive PDF reads plus minimum token access by provider.
-- `slack-openai-uat.md`: Live Slack/OpenAI UAT results, repeated tool-call finding, deterministic runner fallback, and fixture-scope note.
+- `slack-openai-uat.md`: Live Slack/OpenAI UAT results, repeated tool-call finding, deterministic runner fallback, Socket Mode startup disconnect guard, and fixture-scope note.
 - `slack-app-setup-and-uat.md`: Real Slack app setup, secret handling, local daemon operation, runtime fix, and live UAT results for Slack Local File Search v0.
 - `slack-app-home-chat.md`: Decision and implementation notes for Slack-native App Home and Messages tab chat.
 - `typed-agent-workflow-and-local-observability.md`: POC decision to keep Chat Orchestrator, Planner, deterministic Executor, and Reviewer in one Local Agent process while adding structured local event logs and retrieval UAT hardening for bounded final reads, confirmation-gated continuation state, content-file prioritization, and reviewer feedback containment.

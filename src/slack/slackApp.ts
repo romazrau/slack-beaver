@@ -1,5 +1,5 @@
 import slackBolt from "@slack/bolt";
-import type { App as SlackBoltApp } from "@slack/bolt";
+import type { App as SlackBoltApp, Logger } from "@slack/bolt";
 import { runAgentTextCommand } from "../agent/agentCommands.js";
 import type { AppConfig } from "../config/config.js";
 import { LocalMemoryStore, mergeUniquePaths } from "../memory/localMemory.js";
@@ -17,9 +17,14 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
   }
 
   const runtimeStartedAt = new Date();
+  const receiver = new slackBolt.SocketModeReceiver({
+    appToken: config.slack.appToken
+  });
+  protectSocketModeClientFromConnectingDisconnect(receiver.client);
   const app = new slackBolt.App({
     token: config.slack.botToken,
     appToken: config.slack.appToken,
+    receiver,
     socketMode: true
   });
 
@@ -75,6 +80,69 @@ export function createSlackApp(config: AppConfig): SlackBoltApp {
   });
 
   return app;
+}
+
+type SocketModeStateMachine = {
+  getCurrentState: () => string;
+};
+
+type PatchableSocketModeClient = {
+  stateMachine: SocketModeStateMachine;
+  logger?: Pick<Logger, "warn">;
+  onWebSocketMessage: (event: SocketModeMessageEvent) => Promise<void>;
+};
+
+type SocketModeMessageEvent = {
+  data: unknown;
+};
+
+export function protectSocketModeClientFromConnectingDisconnect(client: unknown): void {
+  const socketClient = client as PatchableSocketModeClient;
+  const originalOnWebSocketMessage = socketClient.onWebSocketMessage.bind(socketClient);
+
+  socketClient.onWebSocketMessage = async (event: SocketModeMessageEvent): Promise<void> => {
+    if (isConnectingDisconnectEvent(socketClient.stateMachine, event.data)) {
+      socketClient.logger?.warn?.(
+        "Ignoring Slack Socket Mode server disconnect received before the connection handshake completed; waiting for the SDK reconnect path."
+      );
+      return;
+    }
+
+    await originalOnWebSocketMessage(event);
+  };
+}
+
+function isConnectingDisconnectEvent(
+  stateMachine: SocketModeStateMachine,
+  data: unknown
+): boolean {
+  if (stateMachine.getCurrentState() !== "connecting") {
+    return false;
+  }
+
+  const text = socketModeMessageDataToString(data);
+  if (!text) {
+    return false;
+  }
+
+  try {
+    const message = JSON.parse(text) as { type?: unknown };
+    return message.type === "disconnect";
+  } catch {
+    return false;
+  }
+}
+
+function socketModeMessageDataToString(data: unknown): string | undefined {
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (Buffer.isBuffer(data)) {
+    return data.toString("utf8");
+  }
+
+  return undefined;
 }
 
 function loadAppHomeState(config: AppConfig) {
