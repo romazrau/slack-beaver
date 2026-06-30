@@ -32,7 +32,7 @@
 - `docs/repo-goal/13-dynamic-readable-scope-and-runtime-notices.md` now defines the selected method for Slack-native readable-scope expansion and proactive Local Agent lifecycle notices.
 - `docs/repo-goal/14-agent-retrieval-reviewer.md` defines and records the implemented retrieval planning and independent reviewer quality gate for `ask` and natural App DM answers.
 - `docs/repo-goal/15-typed-agent-workflow-and-local-observability.md` defines and records the implemented POC architecture for a typed Chat Orchestrator, Planner, deterministic Executor, evidence ledger, Reviewer workflow, and structured local event logs.
-- `docs/repo-goal/17-agent-retrieval-fallback-optimization.md` defines the next two-goal optimization plan for reducing generic insufficient-context fallbacks: current configured-context reliability first, public web search boundary second.
+- `docs/repo-goal/17-agent-retrieval-fallback-optimization.md` defines the two-goal optimization plan for reducing generic insufficient-context fallbacks; the current configured-context reliability goal is implemented, while the public web search boundary decision remains open.
 - `docs/reproducible-demo/` now provides a dedicated repeatable POC demo plan covering local Slack agent operation, Center Server task dispatch, multi-agent comparison, fixture expectations, and evidence capture.
 - `docs/repo-goal/00-poc.md` now explicitly records that multiple Local Agents and Central Server routing are future work; the current POC remains single-owner / single-active-agent.
 - `docs/memory/local-memory-and-ai-agent.md` records the SQLite memory, OpenAI-only, local CLI token setup, and original deferred full OpenAI agent decisions.
@@ -128,6 +128,7 @@
 - Slack Socket Mode startup disconnect validation passed focused `tests/slackApp.test.ts` coverage and `npm run typecheck` under Node.js `v22.23.1`.
 - Reviewer supplemental read and Google read routing validation passed focused `tests/agentCommands.test.ts` / `tests/agentPlan.test.ts` coverage and `npm run typecheck`, covering snippet-only typed TODO search recovery through the independent reviewer fallback read cap, legacy `google_doc_read` fulfillment through Drive file read, and Google read dedupe across the legacy alias and Drive reader.
 - Google Drive continuation-read validation passed focused `tests/googleWorkspace.test.ts` and `tests/agentCommands.test.ts` coverage plus `npm run typecheck`, covering `nextOffset` metadata from bounded Docs reads and model-requested `google_drive_file_read` continuation with an offset.
+- Agent retrieval fallback optimization validation passed focused `tests/agentPlan.test.ts` and `tests/agentCommands.test.ts` coverage plus `npm run typecheck`, covering multi-turn retrieval clarification chaining, `OR` query splitting, deterministic relaxed-query retry, reviewer supplemental reads from retry hits, clearer zero-result fallback text, and explicit public web search boundary wording.
 
 ## Likely Next Work
 
@@ -144,5 +145,5 @@
 - Run live Slack/OpenAI UAT for the agent retrieval reviewer flow, including vague short-passage clarification and reviewer-quality grounded answers.
 - Run live Slack/OpenAI UAT for typed planner/executor/reviewer answers and verify `logs/agent-events/YYYY-MM-DD.jsonl` correlation from a Slack screenshot timestamp.
 - Re-run live Slack UAT for the Agent Retrieval UAT Hardening cases and compare Slack-visible replies with `logs/agent-traces/YYYY-MM-DD.jsonl` and `logs/agent-events/YYYY-MM-DD.jsonl`.
-- Implement the first goal in `docs/repo-goal/17-agent-retrieval-fallback-optimization.md`: multi-turn retrieval clarification state, non-OR query variants, zero-result retry, and clearer configured-source fallback wording.
+- Run live Slack UAT for the first goal in `docs/repo-goal/17-agent-retrieval-fallback-optimization.md`, including the original article-search flow with `任一篇` and `都可以`, then compare Slack-visible replies with `logs/agent-traces/YYYY-MM-DD.jsonl` and `logs/agent-events/YYYY-MM-DD.jsonl`.
 - Decide the second goal in `docs/repo-goal/17-agent-retrieval-fallback-optimization.md`: whether public web search is supported or explicitly out of scope.

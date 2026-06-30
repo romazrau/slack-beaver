@@ -152,3 +152,39 @@ Live Slack UAT should include:
   searched, not expose internal planner details by default.
 - Preserve full traceability in `logs/agent-events` and `logs/agent-traces` so
   screenshots can be correlated with exact planner and tool decisions.
+
+## Implementation Result
+
+First Goal implemented on 2026-06-30.
+
+Implemented behavior:
+
+- Multi-turn retrieval clarification follow-ups now search backward to the
+  original retrieval request and attach all short clarification answers, so a
+  later answer such as `都可以` does not replace the original article-search
+  intent.
+- Planner search validation splits `OR`-joined or pipe-joined query variants
+  into independent search steps before deterministic execution.
+- Planner instructions now explicitly require each search query to be one short
+  standalone variant and prohibit boolean-style joined query strings.
+- Typed retrieval now performs one deterministic relaxed-query retry when all
+  initial configured-source searches return zero results.
+- Retry tool-call IDs are isolated from the original zero-result searches, and
+  reviewer supplemental reads can target the retry plan when the retry found
+  candidate sources.
+- If retry still produces zero results, the Slack-visible answer names the
+  configured sources searched and their result counts instead of returning only
+  the generic insufficient-context fallback.
+- Public web wording such as `google 上` is handled as an explicit current
+  capability boundary: the agent explains that public web/Google search is not
+  enabled and offers configured local/Workspace sources instead.
+
+Validated with:
+
+```sh
+npm test -- tests/agentPlan.test.ts tests/agentCommands.test.ts
+npm run typecheck
+```
+
+Second Goal remains open: decide whether public web search should be added or
+kept explicitly out of scope.

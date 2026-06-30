@@ -38,6 +38,7 @@ const SEARCH_TO_READ_TOOL: Record<AgentPlanSearchStep["tool"], AgentPlanReadStep
 };
 const MAX_PLAN_SOURCES = 3;
 const MAX_PLAN_SEARCHES = 5;
+const MAX_SEARCH_QUERY_CHARS = 500;
 
 export function parseAgentPlan(value: string | undefined): { ok: true; plan: AgentPlan } | { ok: false; reason: string } {
   if (!value?.trim()) {
@@ -197,24 +198,37 @@ function parseSearches(value: unknown): { ok: true; searches: ParsedSearches } |
       return { ok: false, reason: "search query must be non-empty" };
     }
     const query = item.query.trim();
-    if (query.length > 500) {
+    if (query.length > MAX_SEARCH_QUERY_CHARS) {
       return { ok: false, reason: "search query is too long" };
     }
 
-    const existingIndex = searches.findIndex((search) => search.tool === item.tool && search.query === query);
-    if (existingIndex >= 0) {
-      originalIndexToSearchIndex[originalIndex] = existingIndex;
-      continue;
-    }
+    for (const queryVariant of normalizeSearchQueryVariants(query)) {
+      const existingIndex = searches.findIndex((search) => search.tool === item.tool && search.query === queryVariant);
+      if (existingIndex >= 0) {
+        originalIndexToSearchIndex[originalIndex] ??= existingIndex;
+        continue;
+      }
 
-    if (searches.length < MAX_PLAN_SEARCHES) {
-      originalIndexToSearchIndex[originalIndex] = searches.length;
-      searches.push({ tool: item.tool, query });
-    } else {
+      if (searches.length < MAX_PLAN_SEARCHES) {
+        originalIndexToSearchIndex[originalIndex] ??= searches.length;
+        searches.push({ tool: item.tool, query: queryVariant });
+      }
+    }
+    if (originalIndexToSearchIndex[originalIndex] === undefined) {
       originalIndexToSearchIndex[originalIndex] = undefined;
     }
   }
   return { ok: true, searches: { steps: searches, originalIndexToSearchIndex } };
+}
+
+function normalizeSearchQueryVariants(query: string): string[] {
+  const variants = query
+    .replace(/[“”]/g, "\"")
+    .split(/\s+(?:OR|or)\s+|[|｜]+/u)
+    .map((variant) => variant.replace(/\s+/g, " ").trim())
+    .filter((variant) => variant.length > 0 && variant.length <= MAX_SEARCH_QUERY_CHARS);
+
+  return variants.length > 0 ? variants : [query];
 }
 
 function parseReadPolicy(value: unknown): { ok: true; readPolicy: AgentReadPolicy } | { ok: false; reason: string } {

@@ -101,6 +101,33 @@ describe("validateAgentPlan", () => {
     });
   });
 
+  it("splits OR-joined planner search variants into standalone searches", () => {
+    const result = validateAgentPlan({
+      intent: "answer_from_sources",
+      requiresClarification: false,
+      clarifyingQuestion: null,
+      sources: ["google_drive"],
+      searches: [
+        {
+          tool: "google_drive_search",
+          query: "AI 變革 開發人員 影響 OR AI transformation impact developers"
+        }
+      ],
+      reads: [],
+      readPolicy: { maxReads: 0 }
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      plan: {
+        searches: [
+          { tool: "google_drive_search", query: "AI 變革 開發人員 影響" },
+          { tool: "google_drive_search", query: "AI transformation impact developers" }
+        ]
+      }
+    });
+  });
+
   it("remaps read indexes when planner searches are deduplicated", () => {
     const result = validateAgentPlan({
       intent: "answer_from_sources",

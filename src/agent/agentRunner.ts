@@ -37,6 +37,7 @@ import {
 } from "../slack/runtimeStatus.js";
 
 const REVIEWER_SUPPLEMENTAL_READ_MAX = 3;
+const ZERO_RESULT_RETRY_TOOL_CALL_ID_PREFIX = "zero_result_retry_";
 
 export type AgentModelInput = {
   question: string;
@@ -478,6 +479,23 @@ async function runAgentLoop(input: {
     });
   }
 
+  if (!input.resumeState && isPublicWebSearchRequest(effectiveQuestion)) {
+    const answer = buildPublicWebSearchBoundaryAnswer();
+    await traceAgentEvent(input, traceId, "final_answer", {
+      reason: "public_web_search_out_of_scope",
+      toolCallCount: 0
+    });
+    await writeAgentEvent(input, traceId, turnId, conversationId, "chat", "slack_reply_sent", {
+      direction: "output",
+      kind: "slack_reply",
+      summary: "Sent public web search boundary reply."
+    });
+    return {
+      answer,
+      toolCallCount: 0
+    };
+  }
+
   const clarification = clarificationFollowUp
     ? undefined
     : buildClarificationForAmbiguousRetrievalRequest(input.question);
@@ -830,44 +848,38 @@ async function tryRunTypedAgentWorkflow(input: {
   }
 
   const toolContext = buildToolExecutionContext(input, retrievalBudget);
-  const toolOutputs = await executeAgentPlan({
+  let supplementalReadPlan = plan;
+  let supplementalSearchCallIdPrefix: string | undefined;
+  let toolOutputs = await executeTypedAgentPlanWithLogs({
+    input,
     plan,
-    context: toolContext,
-    onToolCallStart: async (toolCall) => {
-      await traceAgentEvent(input, input.traceId, "tool_call_start", {
-        ...summarizeToolCall(toolCall),
-        retrievalBudget: summarizeRetrievalBudget(retrievalBudget)
-      });
-      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "tool_call_start", {
-        direction: "output",
-        kind: "tool_call",
-        summary: `Calling ${toolCall.name} with retrievalBudget=${retrievalBudget.mode}.`,
-        payloadRedacted: payloadForMode(input.config, {
-          ...summarizeToolCall(toolCall),
-          retrievalBudget: summarizeRetrievalBudget(retrievalBudget)
-        })
-      });
-    },
-    onToolCallResult: async (result) => {
-      await traceAgentEvent(input, input.traceId, "tool_call_result", summarizeToolOutput(result));
-      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "tool_call_result", {
-        direction: "input",
-        kind: "tool_result",
-        summary: `${result.name} returned ${result.resultCount} result(s).`,
-        payloadRedacted: payloadForMode(input.config, summarizeToolOutput(result))
-      });
-    },
-    onToolCallError: async (toolCall, error) => {
-      const summary = summarizeToolError(toolCall, error);
-      await traceAgentEvent(input, input.traceId, "tool_call_error", summary);
-      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "tool_call_error", {
-        direction: "error",
-        kind: "tool_error",
-        summary: `${toolCall.name} failed: ${summary.message ?? "Unknown error"}`,
-        payloadRedacted: payloadForMode(input.config, summary)
-      });
-    }
+    toolContext,
+    retrievalBudget
   });
+  if (toolOutputs.length > 0 && !toolOutputs.some((output) => output.resultCount > 0)) {
+    const retryPlan = buildZeroResultRetryPlan(plan, input.effectiveQuestion);
+    if (retryPlan.searches.length > 0) {
+      await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "zero_result_retry", {
+        direction: "internal",
+        kind: "retrieval_retry",
+        summary: `Retrying zero-result retrieval with ${retryPlan.searches.length} relaxed search(es).`,
+        payloadRedacted: payloadForMode(input.config, { searches: retryPlan.searches })
+      });
+      const retryOutputs = await executeTypedAgentPlanWithLogs({
+        input,
+        plan: retryPlan,
+        toolContext,
+        retrievalBudget,
+        toolCallIdPrefix: ZERO_RESULT_RETRY_TOOL_CALL_ID_PREFIX,
+        zeroResultRetry: true
+      });
+      if (retryOutputs.some((output) => output.resultCount > 0)) {
+        supplementalReadPlan = retryPlan;
+        supplementalSearchCallIdPrefix = ZERO_RESULT_RETRY_TOOL_CALL_ID_PREFIX;
+      }
+      toolOutputs = [...toolOutputs, ...retryOutputs];
+    }
+  }
   const evidenceLedger = buildEvidenceLedger(toolOutputs);
   await writeAgentEvent(input, input.traceId, input.turnId, input.conversationId, "executor", "evidence_ledger_updated", {
     direction: "internal",
@@ -879,7 +891,7 @@ async function tryRunTypedAgentWorkflow(input: {
   if (toolOutputs.length === 0 || !toolOutputs.some((output) => output.resultCount > 0)) {
     return logTypedWorkflowReply(
       input,
-      "I could not produce a grounded answer from the configured local context.",
+      buildZeroResultFallbackAnswer(toolOutputs),
       toolOutputs.length
     );
   }
@@ -925,9 +937,10 @@ async function tryRunTypedAgentWorkflow(input: {
   }
   if (review.decision === "needs_more_context") {
     const supplementalToolCalls = buildSupplementalReadToolCalls({
-      plan,
+      plan: supplementalReadPlan,
       toolOutputs,
-      maxSupplementalReads: REVIEWER_SUPPLEMENTAL_READ_MAX
+      maxSupplementalReads: REVIEWER_SUPPLEMENTAL_READ_MAX,
+      searchCallIdPrefix: supplementalSearchCallIdPrefix
     });
     const supplementalOutputs: AgentToolCallResult[] = [];
     for (const toolCall of supplementalToolCalls) {
@@ -1041,6 +1054,149 @@ async function tryRunTypedAgentWorkflow(input: {
     review.message ?? "I could not produce a grounded answer from the configured local context.",
     toolOutputs.length
   );
+}
+
+async function executeTypedAgentPlanWithLogs(input: {
+  input: {
+    source: AgentCommandSource;
+    config: AppConfig;
+    purpose: "question" | "conversation";
+    traceId: string;
+    turnId: string;
+    conversationId: string;
+  };
+  plan: AgentPlan;
+  toolContext: ToolExecutionContext;
+  retrievalBudget: RetrievalBudget;
+  toolCallIdPrefix?: string;
+  zeroResultRetry?: boolean;
+}): Promise<AgentToolCallResult[]> {
+  return executeAgentPlan({
+    plan: input.plan,
+    context: input.toolContext,
+    toolCallIdPrefix: input.toolCallIdPrefix,
+    onToolCallStart: async (toolCall) => {
+      await traceAgentEvent(input.input, input.input.traceId, "tool_call_start", {
+        ...summarizeToolCall(toolCall),
+        ...(input.zeroResultRetry ? { zeroResultRetry: true } : {}),
+        retrievalBudget: summarizeRetrievalBudget(input.retrievalBudget)
+      });
+      await writeAgentEvent(input.input, input.input.traceId, input.input.turnId, input.input.conversationId, "executor", "tool_call_start", {
+        direction: "output",
+        kind: "tool_call",
+        summary: input.zeroResultRetry
+          ? `Calling ${toolCall.name} for zero-result retry with retrievalBudget=${input.retrievalBudget.mode}.`
+          : `Calling ${toolCall.name} with retrievalBudget=${input.retrievalBudget.mode}.`,
+        payloadRedacted: payloadForMode(input.input.config, {
+          ...summarizeToolCall(toolCall),
+          ...(input.zeroResultRetry ? { zeroResultRetry: true } : {}),
+          retrievalBudget: summarizeRetrievalBudget(input.retrievalBudget)
+        })
+      });
+    },
+    onToolCallResult: async (result) => {
+      await traceAgentEvent(input.input, input.input.traceId, "tool_call_result", {
+        ...summarizeToolOutput(result),
+        ...(input.zeroResultRetry ? { zeroResultRetry: true } : {})
+      });
+      await writeAgentEvent(input.input, input.input.traceId, input.input.turnId, input.input.conversationId, "executor", "tool_call_result", {
+        direction: "input",
+        kind: "tool_result",
+        summary: input.zeroResultRetry
+          ? `${result.name} zero-result retry returned ${result.resultCount} result(s).`
+          : `${result.name} returned ${result.resultCount} result(s).`,
+        payloadRedacted: payloadForMode(input.input.config, summarizeToolOutput(result))
+      });
+    },
+    onToolCallError: async (toolCall, error) => {
+      const summary = summarizeToolError(toolCall, error);
+      await traceAgentEvent(input.input, input.input.traceId, "tool_call_error", {
+        ...summary,
+        ...(input.zeroResultRetry ? { zeroResultRetry: true } : {})
+      });
+      await writeAgentEvent(input.input, input.input.traceId, input.input.turnId, input.input.conversationId, "executor", "tool_call_error", {
+        direction: "error",
+        kind: "tool_error",
+        summary: input.zeroResultRetry
+          ? `${toolCall.name} zero-result retry failed: ${summary.message ?? "Unknown error"}`
+          : `${toolCall.name} failed: ${summary.message ?? "Unknown error"}`,
+        payloadRedacted: payloadForMode(input.input.config, summary)
+      });
+    }
+  });
+}
+
+function buildZeroResultRetryPlan(plan: AgentPlan, question: string): AgentPlan {
+  const existing = new Set(plan.searches.map((search) => `${search.tool}:${normalizeSearchText(search.query)}`));
+  const searches: AgentPlan["searches"] = [];
+  const candidates = [...plan.searches.map((search) => ({ tool: search.tool, query: search.query })), ...plan.searches.map((search) => ({ tool: search.tool, query: question }))];
+
+  for (const candidate of candidates) {
+    const relaxed = buildRelaxedSearchQuery(candidate.query);
+    if (!relaxed) {
+      continue;
+    }
+    const key = `${candidate.tool}:${normalizeSearchText(relaxed)}`;
+    if (existing.has(key) || searches.some((search) => `${search.tool}:${normalizeSearchText(search.query)}` === key)) {
+      continue;
+    }
+    searches.push({ tool: candidate.tool, query: relaxed });
+    if (searches.length >= plan.searches.length) {
+      break;
+    }
+  }
+
+  return {
+    ...plan,
+    searches,
+    reads: [],
+    readPolicy: { maxReads: 0, reason: "Relaxed zero-result retry searches only." }
+  };
+}
+
+function buildRelaxedSearchQuery(query: string): string | undefined {
+  const normalized = normalizeSearchText(query)
+    .replace(/\b(?:or|and|the|a|an|about|on|impact|article|articles|public|web)\b/gi, " ")
+    .replace(/(?:文章|影響|任一篇|任何一篇|公開|網路|網頁|都可以|關於|关于)/g, " ");
+  const terms = normalized
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean)
+    .filter((term, index, list) => list.findIndex((item) => item.toLowerCase() === term.toLowerCase()) === index);
+  if (terms.length === 0) {
+    return undefined;
+  }
+  return terms.slice(0, 4).join(" ");
+}
+
+function normalizeSearchText(value: string): string {
+  return value.replace(/[“”"']/g, " ").replace(/[|｜]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function buildZeroResultFallbackAnswer(toolOutputs: AgentToolCallResult[]): string {
+  const searched = summarizeSearchedConfiguredSources(toolOutputs);
+  if (searched.length === 0) {
+    return "I could not produce a grounded answer because no configured local or Workspace search results were available.";
+  }
+  return `I searched the configured sources but found no matching local or Workspace results. Sources searched: ${searched.join(", ")}.`;
+}
+
+function summarizeSearchedConfiguredSources(toolOutputs: AgentToolCallResult[]): string[] {
+  const labels: Record<string, string> = {
+    local_search: "local files",
+    google_drive_search: "Google Drive",
+    gmail_search: "Gmail"
+  };
+  return Object.entries(labels)
+    .map(([toolName, label]) => {
+      const outputs = toolOutputs.filter((output) => output.name === toolName);
+      if (outputs.length === 0) {
+        return undefined;
+      }
+      const resultCount = outputs.reduce((sum, output) => sum + output.resultCount, 0);
+      return `${label} (${resultCount})`;
+    })
+    .filter((value): value is string => Boolean(value));
 }
 
 async function logTypedWorkflowReply(
@@ -1548,28 +1704,49 @@ function buildClarificationFollowUpQuestion(
     return undefined;
   }
 
-  const recentAssistant = [...conversationContext].reverse().find((item) => item.role === "assistant");
-  const recentUser = [...conversationContext].reverse().find((item) => item.role === "user");
-  if (!recentAssistant || !recentUser) {
+  const recentAssistantIndex = findLastIndex(
+    conversationContext,
+    (item) => item.role === "assistant" && isRetrievalClarificationQuestion(item.content)
+  );
+  if (recentAssistantIndex < 0) {
     return undefined;
   }
 
-  if (!isRetrievalClarificationQuestion(recentAssistant.content)) {
+  const previousRetrievalIndex = findLastIndex(
+    conversationContext.slice(0, recentAssistantIndex),
+    (item) => item.role === "user" && isRetrievalRequest(item.content)
+  );
+  if (previousRetrievalIndex < 0) {
     return undefined;
   }
 
-  if (!isRetrievalRequest(recentUser.content)) {
+  const previousQuestion = conversationContext[previousRetrievalIndex]?.content;
+  if (!previousQuestion) {
     return undefined;
   }
+  const intermediateAnswers = conversationContext
+    .slice(previousRetrievalIndex + 1)
+    .filter((item) => item.role === "user")
+    .map((item) => item.content.trim())
+    .filter((answer) => answer.length > 0 && answer.length <= 80);
 
   return {
-    previousQuestion: recentUser.content,
+    previousQuestion,
     question: [
-      recentUser.content,
+      previousQuestion,
       "",
-      `User clarified the retrieval preference: ${current}`
+      ...[...intermediateAnswers, current].map((answer) => `User clarified the retrieval preference: ${answer}`)
     ].join("\n")
   };
+}
+
+function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (predicate(items[index] as T)) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 function buildToolExecutionContext(input: {
@@ -1751,6 +1928,7 @@ function buildPlannerInstructions(baseInstructions: string): string {
     "Choose one intent: answer_from_sources, ask_user, answer_without_tools, insufficient_context.",
     "For subjective or underspecified requests, set requiresClarification=true and provide one clarifyingQuestion.",
     "For retrieval requests, provide searches using only local_search, gmail_search, or google_drive_search.",
+    "Each search query must be one short standalone variant. Do not join variants with OR, pipes, commas, or boolean syntax.",
     "Provide reads only when bounded content is likely needed, using local_file_read, gmail_read_message, or google_drive_file_read. Use google_doc_read only when the source is known to be a native Google Docs document.",
     "A read step must reference a prior search by zero-based fromSearchIndex.",
     "Use budgetHint=expanded_single_document only when the user clearly asks for a complete outline or summary of one specific Google Drive document. Otherwise use normal.",
@@ -1810,6 +1988,18 @@ function buildClarificationForAmbiguousRetrievalRequest(question: string): strin
   }
 
   return undefined;
+}
+
+function isPublicWebSearchRequest(question: string): boolean {
+  const normalized = question.toLowerCase();
+  if (/google\s*drive|gmail|本機|本地|local\s+files?/.test(normalized)) {
+    return false;
+  }
+  return /(google\s*上|網路|網頁|公開文章|公開的文章|public\s+(?:web|article)|web\s+search|on\s+google)/i.test(question);
+}
+
+function buildPublicWebSearchBoundaryAnswer(): string {
+  return "I can search configured local files, Google Drive, and Gmail, but public web/Google search is not enabled. I can look in the configured local and Workspace sources instead.";
 }
 
 function isRetrievalClarificationQuestion(value: string): boolean {

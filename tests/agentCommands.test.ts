@@ -1609,6 +1609,308 @@ describe("runAgentTextCommand", () => {
     expect(secondResponse).toContain("任一篇符合主題");
   });
 
+  it("keeps the original retrieval request across multiple short clarification answers", async () => {
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const firstResponse = await runAgentTextCommand({
+      text: "我想找一篇文章，是關於AI 變革對開發人員的影響",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            return {
+              responseId: "plan_1",
+              finalAnswer: JSON.stringify({
+                intent: "ask_user",
+                requiresClarification: true,
+                clarifyingQuestion: "你想找的是本機/Google Drive/Gmail 裡已有的一篇文章，還是任一篇符合主題的文章？",
+                sources: [],
+                searches: [],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+          throw new Error("First clarification should not draft an answer.");
+        }
+      }
+    });
+    expect(firstResponse).toContain("本機/Google Drive/Gmail");
+
+    const secondResponse = await runAgentTextCommand({
+      text: "任一篇",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            expect(input.question).toContain("我想找一篇文章，是關於AI 變革對開發人員的影響");
+            expect(input.question).toContain("User clarified the retrieval preference: 任一篇");
+            return {
+              responseId: "plan_2",
+              finalAnswer: JSON.stringify({
+                intent: "ask_user",
+                requiresClarification: true,
+                clarifyingQuestion: "你偏好文章的語言是中文、英文，還是都可以？",
+                sources: [],
+                searches: [],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+          throw new Error("Second clarification should not draft an answer.");
+        }
+      }
+    });
+    expect(secondResponse).toContain("語言");
+
+    const seenPlannerQuestions: string[] = [];
+    const thirdResponse = await runAgentTextCommand({
+      text: "都可以",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            seenPlannerQuestions.push(input.question);
+            expect(input.question).toContain("我想找一篇文章，是關於AI 變革對開發人員的影響");
+            expect(input.question).toContain("User clarified the retrieval preference: 任一篇");
+            expect(input.question).toContain("User clarified the retrieval preference: 都可以");
+            return {
+              responseId: "plan_3",
+              finalAnswer: JSON.stringify({
+                intent: "answer_without_tools",
+                requiresClarification: false,
+                clarifyingQuestion: null,
+                sources: [],
+                searches: [],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+
+          return {
+            responseId: "answer_1",
+            finalAnswer: "我會用原本的文章主題和兩個偏好繼續找。",
+            toolCalls: []
+          };
+        }
+      }
+    });
+
+    expect(seenPlannerQuestions).toHaveLength(1);
+    expect(thirdResponse).toContain("原本的文章主題");
+  });
+
+  it("retries typed retrieval with relaxed queries before returning a zero-result fallback", async () => {
+    await fs.writeFile(path.join(tempDir, "ai-notes.md"), "AI changes developer workflow.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const response = await runAgentTextCommand({
+      text: "找 AI article impact",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            return {
+              responseId: "plan_1",
+              finalAnswer: JSON.stringify({
+                intent: "answer_from_sources",
+                requiresClarification: false,
+                clarifyingQuestion: null,
+                sources: ["local_files"],
+                searches: [{ tool: "local_search", query: "AI article impact" }],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+
+          if (input.purpose === "reviewer") {
+            return reviewerAcceptResponse();
+          }
+
+          expect(input.toolOutputs.some((output) => output.name === "local_search" && output.resultCount > 0)).toBe(true);
+          return {
+            responseId: "draft_1",
+            finalAnswer: "Found after relaxed retry: ai-notes.md.",
+            toolCalls: []
+          };
+        }
+      }
+    });
+
+    expect(response).toContain("Found after relaxed retry");
+  });
+
+  it("uses relaxed retry results for reviewer supplemental reads", async () => {
+    await fs.writeFile(path.join(tempDir, "ai-notes.md"), "AI changes developer workflow.", "utf8");
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    let draftCalls = 0;
+    let reviewerCalls = 0;
+    const response = await runAgentTextCommand({
+      text: "找 AI article impact",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            return {
+              responseId: "plan_1",
+              finalAnswer: JSON.stringify({
+                intent: "answer_from_sources",
+                requiresClarification: false,
+                clarifyingQuestion: null,
+                sources: ["local_files"],
+                searches: [{ tool: "local_search", query: "AI article impact" }],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+
+          if (input.purpose === "reviewer") {
+            reviewerCalls += 1;
+            if (reviewerCalls === 1) {
+              return {
+                responseId: "review_1",
+                finalAnswer: JSON.stringify({
+                  decision: "needs_more_context",
+                  message: "Read the retry result."
+                }),
+                toolCalls: []
+              };
+            }
+            return reviewerAcceptResponse();
+          }
+
+          draftCalls += 1;
+          if (draftCalls === 1) {
+            expect(input.toolOutputs.some((output) => output.name === "local_search" && output.resultCount > 0)).toBe(true);
+            expect(input.toolOutputs.some((output) => output.name === "local_file_read")).toBe(false);
+            return {
+              responseId: "draft_1",
+              finalAnswer: "Retry search found ai-notes.md, but content is not read yet.",
+              toolCalls: []
+            };
+          }
+
+          expect(input.toolOutputs.some((output) => output.name === "local_file_read" && output.output.includes("developer workflow"))).toBe(true);
+          return {
+            responseId: "draft_2",
+            finalAnswer: "Supplemental read used retry result content.",
+            toolCalls: []
+          };
+        }
+      }
+    });
+
+    expect(response).toContain("Supplemental read used retry result content");
+    expect(draftCalls).toBe(2);
+    expect(reviewerCalls).toBe(2);
+  });
+
+  it("explains searched configured sources when typed retrieval still has zero results", async () => {
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const response = await runAgentTextCommand({
+      text: "找 AI article impact",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse(input) {
+          if (input.purpose === "planner") {
+            return {
+              responseId: "plan_1",
+              finalAnswer: JSON.stringify({
+                intent: "answer_from_sources",
+                requiresClarification: false,
+                clarifyingQuestion: null,
+                sources: ["local_files"],
+                searches: [{ tool: "local_search", query: "AI article impact" }],
+                reads: [],
+                readPolicy: { maxReads: 0 }
+              }),
+              toolCalls: []
+            };
+          }
+
+          throw new Error("Zero-result retrieval should not draft an answer.");
+        }
+      }
+    });
+
+    expect(response).toContain("configured sources");
+    expect(response).toContain("local files (0)");
+  });
+
+  it("returns a clear boundary answer for public web search requests", async () => {
+    const config = buildConfig();
+    config.ai.typedWorkflowEnabled = true;
+    config.localMemory.enabled = true;
+    const store = new LocalMemoryStore(config.localMemory.dbPath);
+    store.setProviderTokenConfigured("openai", true);
+    store.close();
+
+    const response = await runAgentTextCommand({
+      text: "google 上找 AI 變革對開發人員的影響",
+      slackUserId: "U123",
+      channelId: "D123",
+      source: "app_home_message",
+      config,
+      modelClient: {
+        async createResponse() {
+          throw new Error("Public web boundary should not call the model.");
+        }
+      }
+    });
+
+    expect(response).toContain("public web/Google search is not enabled");
+    expect(response).toContain("configured local files, Google Drive, and Gmail");
+  });
+
   it("writes trace logs with concrete tool-call inputs for debugging", async () => {
     await fs.writeFile(path.join(tempDir, "notes.md"), "Quiet courage is steady.", "utf8");
     const config = buildConfig();

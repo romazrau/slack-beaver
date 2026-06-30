@@ -16,6 +16,7 @@ const SEARCH_TO_READ_TOOL: Record<AgentPlanSearchStep["tool"], AgentPlanReadStep
 export type ExecuteAgentPlanOptions = {
   plan: AgentPlan;
   context: ToolExecutionContext;
+  toolCallIdPrefix?: string;
   onToolCallStart?: (toolCall: AgentToolCallRequest) => Promise<void>;
   onToolCallResult?: (result: AgentToolCallResult) => Promise<void>;
   onToolCallError?: (toolCall: AgentToolCallRequest, error: unknown) => Promise<void>;
@@ -26,7 +27,7 @@ export async function executeAgentPlan(input: ExecuteAgentPlanOptions): Promise<
   const searchOutputs: Array<AgentToolCallResult | undefined> = [];
 
   for (const [index, search] of input.plan.searches.entries()) {
-    const toolCall = buildSearchToolCall(search, index);
+    const toolCall = buildSearchToolCall(search, index, input.toolCallIdPrefix);
     await input.onToolCallStart?.(toolCall);
     const result = await runPlanToolCall(input, toolCall);
     await input.onToolCallResult?.(result);
@@ -44,7 +45,7 @@ export async function executeAgentPlan(input: ExecuteAgentPlanOptions): Promise<
       continue;
     }
     const toolCall: AgentToolCallRequest = {
-      id: `plan_read_${index + 1}`,
+      id: `${input.toolCallIdPrefix ?? ""}plan_read_${index + 1}`,
       name: read.tool,
       input: readInput
     };
@@ -61,6 +62,7 @@ export function buildSupplementalReadToolCalls(input: {
   plan: AgentPlan;
   toolOutputs: AgentToolCallResult[];
   maxSupplementalReads: number;
+  searchCallIdPrefix?: string;
 }): AgentToolCallRequest[] {
   const maxSupplementalReads = Math.min(Math.max(input.maxSupplementalReads, 0), 3);
   if (maxSupplementalReads === 0) {
@@ -72,7 +74,7 @@ export function buildSupplementalReadToolCalls(input: {
 
   for (const [searchIndex, search] of input.plan.searches.entries()) {
     const searchOutput = input.toolOutputs.find(
-      (output) => output.callId === `plan_search_${searchIndex + 1}` && output.name === search.tool
+      (output) => output.callId === `${input.searchCallIdPrefix ?? ""}plan_search_${searchIndex + 1}` && output.name === search.tool
     );
     if (!searchOutput || searchOutput.resultCount === 0) {
       continue;
@@ -116,9 +118,9 @@ async function runPlanToolCall(
   }
 }
 
-function buildSearchToolCall(search: AgentPlanSearchStep, index: number): AgentToolCallRequest {
+function buildSearchToolCall(search: AgentPlanSearchStep, index: number, toolCallIdPrefix = ""): AgentToolCallRequest {
   return {
-    id: `plan_search_${index + 1}`,
+    id: `${toolCallIdPrefix}plan_search_${index + 1}`,
     name: search.tool,
     input: { query: search.query }
   };
